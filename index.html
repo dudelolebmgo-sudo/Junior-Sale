@@ -4,107 +4,170 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
 <title>Junior Sale</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&display=swap" rel="stylesheet">
 <style>
   :root{
-    --paper:#fff; --surface:#f6f6f3; --ink:#171714; --muted:#75746d;
-    --line:#e2e1db; --green:#146e45; --amber:#9a6b08; --red:#a8241c;
-    --pad:16px; --r:8px;
+    --bg:#f3f2f8; --card:#fff; --ink:#191627; --muted:#6e6880; --line:#e4e1ee;
+    --brand:#5b2bd9; --brand-deep:#3f1ba0; --brand-soft:#efe9fe;
+    --ok:#0b7a4b; --ok-soft:#e3f5ec;
+    --warn:#b06e05; --warn-soft:#fdf1dc;
+    --bad:#c22e24; --bad-soft:#fceae8;
+    --pad:16px; --r:12px; --r-sm:9px;
+    --display:"Bricolage Grotesque",-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+    --ui:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+    --shadow:0 1px 2px rgba(25,22,39,.05),0 4px 14px rgba(25,22,39,.05);
   }
   *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
-  html,body{margin:0;background:var(--paper);color:var(--ink);
-    font:400 16px/1.45 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
-    font-variant-numeric:tabular-nums}
-  body{padding:0 var(--pad) 96px;max-width:520px;margin:0 auto}
-  h1{font-size:20px;font-weight:600;margin:24px 0 4px;letter-spacing:-.01em}
+  html,body{margin:0;background:var(--bg);color:var(--ink);
+    font:400 16px/1.45 var(--ui);font-variant-numeric:tabular-nums;
+    -webkit-font-smoothing:antialiased}
+  body{padding:0 var(--pad) 104px;max-width:520px;margin:0 auto}
+  h1{font-family:var(--display);font-size:28px;font-weight:800;letter-spacing:-.02em;
+    margin:26px 0 4px;line-height:1.1}
   .sub{color:var(--muted);font-size:14px;margin:0 0 20px}
-  label{display:block;font-size:13px;color:var(--muted);margin:16px 0 6px}
+  label{display:block;font-size:12px;font-weight:600;letter-spacing:.04em;
+    text-transform:uppercase;color:var(--muted);margin:20px 0 8px}
   input,select,button{font:inherit;font-variant-numeric:tabular-nums}
-  input{width:100%;padding:13px 12px;border:1px solid var(--line);border-radius:var(--r);
-    background:var(--paper);color:var(--ink)}
-  input:focus,button:focus-visible{outline:2px solid var(--ink);outline-offset:1px}
-  .btn{width:100%;min-height:52px;border:0;border-radius:var(--r);background:var(--ink);
-    color:#fff;font-weight:600;cursor:pointer;margin-top:20px}
-  .btn:disabled{background:var(--line);color:var(--muted);cursor:not-allowed}
-  .btn.ghost{background:var(--paper);color:var(--ink);border:1px solid var(--line);font-weight:400}
+  input{width:100%;padding:14px 13px;border:1px solid var(--line);border-radius:var(--r-sm);
+    background:var(--card);color:var(--ink);transition:border-color .15s,box-shadow .15s}
+  input:focus{outline:0;border-color:var(--brand);box-shadow:0 0 0 3px var(--brand-soft)}
+  button:focus-visible,a:focus-visible{outline:2px solid var(--brand);outline-offset:2px}
   .hide{display:none!important}
 
+  .chips{display:flex;flex-wrap:wrap;gap:6px;margin:0 0 20px;padding:0}
+  .chip{font-size:12.5px;font-weight:600;padding:5px 10px;border-radius:99px;
+    background:var(--card);border:1px solid var(--line);color:var(--muted)}
+  .chip.brand{background:var(--brand-soft);border-color:transparent;color:var(--brand-deep)}
+
+  .btn{width:100%;min-height:54px;border:0;border-radius:var(--r-sm);background:var(--brand);
+    color:#fff;font-weight:700;cursor:pointer;margin-top:22px;letter-spacing:.01em;
+    transition:transform .1s,background .15s;box-shadow:var(--shadow)}
+  .btn:active{transform:scale(.985)}
+  .btn:disabled{background:#dedae8;color:#9a93aa;cursor:not-allowed;box-shadow:none}
+  .btn.ghost{background:var(--card);color:var(--ink);border:1px solid var(--line);font-weight:600}
+
   /* keypad */
-  .dots{display:flex;gap:12px;justify-content:center;margin:28px 0}
-  .dot{width:14px;height:14px;border-radius:50%;border:1.5px solid var(--line)}
-  .dot.on{background:var(--ink);border-color:var(--ink)}
-  .pad{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:8px}
-  .pad button{min-height:60px;border:1px solid var(--line);border-radius:var(--r);
-    background:var(--paper);font-size:22px;cursor:pointer}
-  .pad button:active{background:var(--surface)}
+  .dots{display:flex;gap:14px;justify-content:center;margin:34px 0 26px}
+  .dot{width:15px;height:15px;border-radius:50%;border:2px solid var(--line);
+    transition:background .15s,border-color .15s,transform .15s}
+  .dot.on{background:var(--brand);border-color:var(--brand);transform:scale(1.12)}
+  .pad{display:grid;grid-template-columns:repeat(3,1fr);gap:11px}
+  .pad button{min-height:64px;border:1px solid var(--line);border-radius:var(--r-sm);
+    background:var(--card);font-size:23px;font-weight:600;cursor:pointer;
+    box-shadow:var(--shadow);transition:transform .08s,background .12s}
+  .pad button:active{background:var(--brand-soft);transform:scale(.95)}
 
   /* student picker */
-  .results{border:1px solid var(--line);border-radius:var(--r);margin-top:6px;overflow:hidden}
-  .results button{display:block;width:100%;text-align:left;padding:13px 12px;border:0;
-    border-bottom:1px solid var(--line);background:var(--paper);cursor:pointer}
+  .results{border-radius:var(--r-sm);margin-top:8px;overflow:hidden;box-shadow:var(--shadow);
+    border:1px solid var(--line);background:var(--card)}
+  .results button{display:block;width:100%;text-align:left;padding:14px 13px;border:0;
+    border-bottom:1px solid var(--line);background:var(--card);cursor:pointer;font-weight:600}
   .results button:last-child{border-bottom:0}
-  .results button:active{background:var(--surface)}
-  .results .sec{color:var(--muted);font-size:13px}
-  .results .add{font-weight:600}
+  .results button:active{background:var(--brand-soft)}
+  .results .sec{display:block;color:var(--muted);font-size:13px;font-weight:400;margin-top:2px}
+  .results .add{color:var(--brand-deep)}
 
-  /* selected student + gauge */
-  .who{border:1px solid var(--line);border-radius:var(--r);padding:12px;margin-top:16px}
-  .who .row{display:flex;justify-content:space-between;align-items:baseline;gap:8px}
-  .who .nm{font-weight:600}
-  .who .bal{font-size:14px;color:var(--muted)}
-  .gauge{height:6px;background:var(--surface);border-radius:3px;margin-top:10px;overflow:hidden}
-  .gauge i{display:block;height:100%;width:0;background:var(--green);transition:width .18s}
-  .gauge.warn i{background:var(--amber)} .gauge.over i{background:var(--red)}
-  .blocked{margin-top:10px;padding:10px;border-radius:var(--r);background:#fbeceb;
-    color:var(--red);font-size:14px;font-weight:600}
+  /* selected student */
+  .who{background:var(--card);border:1px solid var(--line);border-radius:var(--r);
+    padding:15px;margin-top:18px;box-shadow:var(--shadow)}
+  .who .row{display:flex;justify-content:space-between;align-items:baseline;gap:10px}
+  .who .nm{font-family:var(--display);font-weight:700;font-size:19px;letter-spacing:-.01em}
+  .who .bal{font-size:14px;font-weight:600;color:var(--muted);white-space:nowrap}
+
+  /* SIGNATURE: one segment per dollar of the $20 limit.
+     Countable at a glance — a seller can see how much room is left. */
+  .gauge{display:flex;gap:2px;margin-top:13px;height:12px}
+  .gauge i{flex:1;background:#e9e6f2;border-radius:2px;transition:background .2s}
+  .gauge i:first-child{border-radius:4px 2px 2px 4px}
+  .gauge i:last-child{border-radius:2px 4px 4px 2px}
+  .gauge.ok   i.f{background:var(--ok)}
+  .gauge.warn i.f{background:var(--warn)}
+  .gauge.over i.f{background:var(--bad)}
+  .gnote{margin-top:8px;font-size:13px;font-weight:600;color:var(--muted)}
+  .gauge.warn ~ .gnote{color:var(--warn)}
+  .gauge.over ~ .gnote{color:var(--bad)}
+
+  .blocked{margin-top:13px;padding:12px 13px;border-radius:var(--r-sm);
+    background:var(--bad-soft);color:var(--bad);font-size:14px;font-weight:600;
+    border-left:3px solid var(--bad)}
 
   /* products */
-  .grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:8px}
-  .grid button{min-height:66px;border:1px solid var(--line);border-radius:var(--r);
-    background:var(--paper);cursor:pointer;padding:10px;text-align:left;position:relative}
-  .grid button.on{border-color:var(--ink);border-width:2px}
-  .grid .pn{display:block;font-size:15px}
-  .grid .pp{display:block;color:var(--muted);font-size:13px;margin-top:2px}
-  .grid .qty{position:absolute;top:8px;right:10px;font-weight:600}
+  .grid{display:grid;grid-template-columns:1fr 1fr;gap:11px}
+  .grid button{min-height:74px;border:1.5px solid var(--line);border-radius:var(--r-sm);
+    background:var(--card);cursor:pointer;padding:12px;text-align:left;position:relative;
+    box-shadow:var(--shadow);transition:transform .08s,border-color .12s,background .12s}
+  .grid button:active{transform:scale(.97)}
+  .grid button.on{border-color:var(--brand);background:var(--brand-soft)}
+  .grid .pn{display:block;font-size:15.5px;font-weight:600;padding-right:26px}
+  .grid .pp{display:inline-block;color:var(--muted);font-size:12.5px;font-weight:600;
+    margin-top:6px;background:var(--bg);padding:2px 7px;border-radius:99px}
+  .grid button.on .pp{background:#fff;color:var(--brand-deep)}
+  .grid .qty{position:absolute;top:9px;right:9px;min-width:24px;height:24px;
+    background:var(--brand);color:#fff;border-radius:99px;font-size:13px;font-weight:700;
+    display:flex;align-items:center;justify-content:center;padding:0 6px}
 
   /* payment */
-  .pay{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:8px}
-  .pay button{min-height:50px;border:1px solid var(--line);border-radius:var(--r);
-    background:var(--paper);cursor:pointer;font-size:14px}
-  .pay button.on{border-color:var(--ink);border-width:2px;font-weight:600}
-  .conv{font-size:13px;color:var(--muted);margin-top:6px}
-  .conv.bad{color:var(--red)}
+  .pay{display:grid;grid-template-columns:repeat(3,1fr);gap:9px}
+  .pay button{min-height:54px;border:1.5px solid var(--line);border-radius:var(--r-sm);
+    background:var(--card);cursor:pointer;font-size:14px;font-weight:600;
+    box-shadow:var(--shadow);transition:transform .08s,border-color .12s,background .12s}
+  .pay button:active{transform:scale(.97)}
+  .pay button.on{border-color:var(--brand);background:var(--brand-soft);color:var(--brand-deep)}
+  .conv{font-size:13px;font-weight:600;color:var(--muted);margin-top:8px}
+  .conv.bad{color:var(--bad)}
 
   .total{display:flex;justify-content:space-between;align-items:baseline;
-    margin-top:22px;padding-top:14px;border-top:1px solid var(--line)}
-  .total .lbl{color:var(--muted);font-size:14px}
-  .total .amt{font-size:30px;font-weight:600;letter-spacing:-.02em}
+    margin-top:24px;padding-top:16px;border-top:1px solid var(--line)}
+  .total .lbl{color:var(--muted);font-size:12px;font-weight:600;
+    letter-spacing:.04em;text-transform:uppercase}
+  .total .amt{font-family:var(--display);font-size:40px;font-weight:800;letter-spacing:-.03em}
 
   /* chrome */
-  .bar{position:fixed;left:0;right:0;bottom:0;background:var(--surface);
-    border-top:1px solid var(--line);padding:9px var(--pad);display:flex;gap:10px;
-    align-items:center;justify-content:space-between;font-size:13px;color:var(--muted)}
+  .bar{position:fixed;left:0;right:0;bottom:0;background:rgba(255,255,255,.92);
+    backdrop-filter:blur(12px);border-top:1px solid var(--line);
+    padding:11px var(--pad);padding-bottom:calc(11px + env(safe-area-inset-bottom));
+    font-size:13px;color:var(--muted)}
   .bar .inner{width:100%;max-width:520px;margin:0 auto;display:flex;gap:10px;
     align-items:center;justify-content:space-between}
-  .bar a{color:var(--ink);cursor:pointer;text-decoration:underline;text-underline-offset:2px}
-  .sync{display:inline-flex;align-items:center;gap:6px}
-  .led{width:8px;height:8px;border-radius:50%;background:var(--green)}
-  .led.pending{background:var(--amber)} .led.err{background:var(--red)}
-  .toast{position:fixed;left:50%;transform:translateX(-50%);bottom:64px;max-width:480px;
-    width:calc(100% - 32px);background:var(--ink);color:#fff;padding:12px 14px;
-    border-radius:var(--r);font-size:14px;z-index:20}
-  .err{color:var(--red);font-size:14px;margin-top:10px;min-height:20px}
-  .adm{border:1px solid var(--line);border-radius:var(--r);padding:10px;margin-top:10px;
-    display:grid;grid-template-columns:1fr 84px 40px;gap:8px;align-items:center}
-  .adm input{padding:9px 10px}
-  .rec{border:1px solid var(--line);border-radius:var(--r);padding:11px 12px;margin-top:8px;
-    display:flex;justify-content:space-between;align-items:center;gap:10px}
+  .bar a{color:var(--brand-deep);cursor:pointer;font-weight:600;text-decoration:none}
+  .sync{display:inline-flex;align-items:center;gap:7px;font-weight:600}
+  .led{width:9px;height:9px;border-radius:50%;background:var(--ok);flex:none}
+  .led.pending{background:var(--warn);animation:pulse 1.4s ease-in-out infinite}
+  .led.err{background:var(--bad)}
+  @keyframes pulse{50%{opacity:.35}}
+
+  .toast{position:fixed;left:50%;transform:translateX(-50%);bottom:76px;max-width:480px;
+    width:calc(100% - 32px);background:var(--ink);color:#fff;padding:13px 15px;
+    border-radius:var(--r-sm);font-size:14px;font-weight:600;z-index:20;
+    box-shadow:0 8px 28px rgba(25,22,39,.28);animation:rise .22s ease-out}
+  @keyframes rise{from{opacity:0;transform:translate(-50%,10px)}}
+
+  .err{color:var(--bad);font-size:14px;font-weight:600;margin-top:12px;min-height:20px}
+
+  /* catalog */
+  .adm{background:var(--card);border:1px solid var(--line);border-radius:var(--r-sm);
+    padding:11px;margin-top:9px;display:grid;grid-template-columns:1fr 88px 40px;gap:9px;
+    align-items:center;box-shadow:var(--shadow)}
+  .adm input{padding:10px}
+  .adm .x{border:0;background:transparent;color:var(--muted);font-size:22px;cursor:pointer}
+
+  /* recent */
+  .rec{background:var(--card);border:1px solid var(--line);border-radius:var(--r-sm);
+    padding:12px 13px;margin-top:9px;display:flex;justify-content:space-between;
+    align-items:center;gap:11px;box-shadow:var(--shadow)}
   .rec .l{min-width:0}
-  .rec .n{font-weight:600;font-size:15px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-  .rec .d{color:var(--muted);font-size:13px}
-  .rec .v{border:1px solid var(--line);background:var(--paper);color:var(--red);
-    border-radius:var(--r);padding:8px 12px;font-size:13px;cursor:pointer;flex:none}
+  .rec .n{font-weight:700;font-size:15px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .rec .d{display:block;color:var(--muted);font-size:13px;margin-top:2px}
+  .rec .v{border:1px solid var(--line);background:var(--card);color:var(--bad);
+    border-radius:var(--r-sm);padding:9px 13px;font-size:13px;font-weight:600;
+    cursor:pointer;flex:none}
   .rec.gone{opacity:.4}
-  .adm .x{border:0;background:transparent;color:var(--muted);font-size:20px;cursor:pointer}
+
+  @media (prefers-reduced-motion:reduce){
+    *{animation:none!important;transition:none!important}
+  }
 </style>
 </head>
 <body>
@@ -134,7 +197,7 @@
 <!-- 3. Sale -->
 <section id="v-sale" class="hide">
   <h1>New sale</h1>
-  <p class="sub" id="saleMeta"></p>
+  <div class="chips" id="saleMeta"></div>
 
   <label for="fStudent">Who is buying</label>
   <input id="fStudent" autocomplete="off" autocapitalize="words" placeholder="Type a first and last name">
@@ -143,7 +206,8 @@
   <div id="picked" class="hide">
     <div class="who">
       <div class="row"><span class="nm" id="whoName"></span><span class="bal" id="whoBal"></span></div>
-      <div class="gauge" id="gauge"><i></i></div>
+      <div class="gauge" id="gauge"></div>
+      <div class="gnote" id="gaugeNote"></div>
       <div class="blocked hide" id="blocked"></div>
       <button class="btn ghost" id="btnPayMode" style="margin-top:12px;min-height:44px">Record a payment</button>
     </div>
@@ -361,8 +425,9 @@ $('btnSession').onclick = async () => {
     const r = await api('openSession', { date, bs_rate: rate });
     if (!r.ok) { $('sesErr').textContent = 'Could not open the session — ' + why(r); return; }
     S.session = r.session;
-    $('saleMeta').textContent = S.seller.first_name + ' · ' + r.session.date
-      + ' · ' + r.session.bs_rate + ' Bs/$';
+    $('saleMeta').innerHTML = `<span class="chip">${S.seller.first_name}</span>`
+      + `<span class="chip">${r.session.date}</span>`
+      + `<span class="chip brand">${r.session.bs_rate} Bs/$</span>`;
     renderGrid(); show('sale'); $('fStudent').focus();
   } catch (err) {
     $('sesErr').textContent = 'Cannot reach the server — ' + why(null, err);
@@ -427,10 +492,16 @@ function renderStudent(){
   const bal = S.balances[S.student.student_id] || 0;
   const over = bal >= S.limit;
   $('whoName').textContent = nameOf(S.student) + (S.student.section ? ' · ' + S.student.section : '');
-  $('whoBal').textContent = bal > 0 ? `Owes ${money(bal)} of ${money(S.limit)}` : 'No debt';
+  $('whoBal').textContent = bal > 0 ? `${money(bal)} owed` : 'No debt';
+  /* One segment per dollar of the limit, so remaining credit is countable. */
+  const filled = Math.min(Math.ceil(bal), S.limit);
   const g = $('gauge');
-  g.className = 'gauge' + (over ? ' over' : bal >= S.near ? ' warn' : '');
-  g.firstElementChild.style.width = Math.min(bal / S.limit, 1) * 100 + '%';
+  g.className = 'gauge ' + (over ? 'over' : bal >= S.near ? 'warn' : 'ok');
+  g.innerHTML = Array.from({ length: S.limit },
+    (_, i) => `<i class="${i < filled ? 'f' : ''}"></i>`).join('');
+  $('gaugeNote').textContent = over
+    ? 'No credit left'
+    : `${money(S.limit - bal)} of credit left`;
   $('blocked').classList.toggle('hide', !over);
   $('blocked').textContent = over
     ? `Blocked. ${S.student.first_name} is at the ${money(S.limit)} limit and cannot buy until the debt is paid.`
