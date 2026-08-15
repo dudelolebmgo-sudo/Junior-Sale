@@ -305,10 +305,37 @@
   <div class="err" id="recErr"></div>
 </section>
 
+<!-- 6. Expenses (admins) -->
+<section id="v-exp" class="hide">
+  <h1>Expenses</h1>
+  <p class="sub">Money spent buying stock. Subtracted from the takings on the dashboard.</p>
+
+  <label for="fExpWhat">What was bought</label>
+  <input id="fExpWhat" autocomplete="off" placeholder="e.g. 60 empanadas from Panaderia Rosa">
+
+  <label>Paid with</label>
+  <div class="pay" id="expPay" style="grid-template-columns:1fr 1fr">
+    <button data-e="CASH_USD">Cash $</button>
+    <button data-e="BS">Bolivares</button>
+  </div>
+
+  <label for="fExpAmt" id="expLabel">Amount spent ($)</label>
+  <input type="number" id="fExpAmt" inputmode="decimal" step="0.01" min="0">
+  <div class="conv" id="expConv"></div>
+
+  <button class="btn" id="btnExpAdd" disabled>Record expense</button>
+  <button class="btn ghost" id="btnExpBack">Back to sales</button>
+  <div class="err" id="expErr"></div>
+
+  <label style="margin-top:26px">Recorded so far</label>
+  <div id="expList"></div>
+</section>
+
 <div class="bar hide" id="bar">
   <div class="nav">
     <span class="sync"><span class="led" id="led"></span><span id="syncTxt">Synced</span></span>
     <button id="lnkRecent">Recent</button>
+    <button id="lnkExp">Spend</button>
     <button id="lnkAdmin" class="hide">Catalog</button>
     <button id="lnkOut" class="out">Sign out</button>
   </div>
@@ -391,7 +418,7 @@ function why(r, err){
 
 /* ============================ views ============================= */
 function show(v){
-  ['pin','session','sale','admin','recent'].forEach(n => $('v-'+n).classList.toggle('hide', n !== v));
+  ['pin','session','sale','admin','recent','exp'].forEach(n => $('v-'+n).classList.toggle('hide', n !== v));
   $('bar').classList.toggle('hide', v === 'pin');
   window.scrollTo(0,0);
 }
@@ -435,6 +462,7 @@ async function login(){
     S.limit = r.debt_limit; S.near = r.near_limit; S.session = r.session;
     $('pinErr').textContent = '';
     $('lnkAdmin').classList.toggle('hide', !S.seller.is_admin);
+    $('lnkExp').classList.remove('hide');
     $('sesWho').textContent = 'Signed in as ' + S.seller.first_name + ' ' + S.seller.last_name + '.';
     $('fDate').value = r.session ? r.session.date : new Date().toISOString().slice(0,10);
     if (r.session) {
@@ -856,6 +884,85 @@ $('recList').onclick = async e => {
     if (S.student) renderStudent();
     toast('Voided.');
   } catch (err) { $('recErr').textContent = why(null, err); b.disabled = false; b.textContent = 'Void'; }
+};
+
+/* =========================== expenses =========================== */
+S.expMethod = null;
+
+$('lnkExp').onclick = async () => {
+  show('exp'); $('expErr').textContent = '';
+  $('expList').innerHTML = '<p class="empty">Loading…</p>';
+  try {
+    const r = await api('expenses');
+    renderExpList(r.ok ? r.expenses : []);
+    if (!r.ok) $('expErr').textContent = why(r);
+  } catch (err) { $('expList').innerHTML = ''; $('expErr').textContent = why(null, err); }
+};
+$('btnExpBack').onclick = () => show('sale');
+
+$('expPay').onclick = e => {
+  const b = e.target.closest('[data-e]'); if (!b) return;
+  touch(); S.expMethod = b.dataset.e;
+  document.querySelectorAll('#expPay [data-e]').forEach(x =>
+    x.classList.toggle('on', x.dataset.e === S.expMethod));
+  $('expLabel').textContent = S.expMethod === 'BS' ? 'Bolivares spent' : 'Amount spent ($)';
+  renderExpForm();
+};
+$('fExpWhat').oninput = renderExpForm;
+$('fExpAmt').oninput = renderExpForm;
+
+function expUsd(){
+  const v = parseFloat($('fExpAmt').value);
+  if (!(v > 0)) return 0;
+  return S.expMethod === 'BS' ? r2(v / S.session.bs_rate) : r2(v);
+}
+function renderExpForm(){
+  touch();
+  const usd = expUsd();
+  $('expConv').textContent = S.expMethod === 'BS' && usd > 0
+    ? `${parseFloat($('fExpAmt').value).toLocaleString()} Bs ÷ ${S.session.bs_rate} = ${money(usd)}` : '';
+  $('btnExpAdd').disabled = !($('fExpWhat').value.trim() && usd > 0 && S.expMethod);
+}
+
+$('btnExpAdd').onclick = async () => {
+  const usd = expUsd();
+  $('btnExpAdd').disabled = true; $('btnExpAdd').textContent = 'Saving…';
+  try {
+    const r = await api('addExpense', {
+      expense_id: uuid(), session_id: S.session ? S.session.session_id : '',
+      description: $('fExpWhat').value.trim(), amount_usd: usd,
+      paid_method: S.expMethod,
+      bs_amount: S.expMethod === 'BS' ? parseFloat($('fExpAmt').value) : '',
+      bs_rate_used: S.expMethod === 'BS' ? S.session.bs_rate : ''
+    });
+    if (!r.ok) { $('expErr').textContent = why(r); return; }
+    renderExpList(r.expenses);
+    $('fExpWhat').value = ''; $('fExpAmt').value = ''; $('expConv').textContent = '';
+    toast(`${money(usd)} expense recorded.`);
+  } catch (err) { $('expErr').textContent = why(null, err); }
+  finally { $('btnExpAdd').textContent = 'Record expense'; renderExpForm(); }
+};
+
+function renderExpList(list){
+  if (!list || !list.length) {
+    $('expList').innerHTML = '<p class="empty">Nothing recorded yet.</p>'; return;
+  }
+  const total = list.reduce((a, e) => a + (e.amount_usd || 0), 0);
+  $('expList').innerHTML = list.map(e => `<div class="rec" data-id="${e.expense_id}">
+      <span class="l"><span class="n">${money(e.amount_usd)} · ${e.description}</span>
+      <span class="d">${new Date(e.ts).toLocaleDateString()} · ${e.seller}</span></span>
+      <button class="v">Remove</button></div>`).join('')
+    + `<p class="sub" style="margin-top:14px">Total spent: <b>${money(total)}</b></p>`;
+}
+$('expList').onclick = async e => {
+  const b = e.target.closest('.v'); if (!b) return;
+  if (!confirm('Remove this expense?')) return;
+  b.disabled = true;
+  try {
+    const r = await api('voidExpense', { expense_id: b.closest('.rec').dataset.id });
+    if (!r.ok) { $('expErr').textContent = why(r); b.disabled = false; return; }
+    renderExpList(r.expenses); toast('Expense removed.');
+  } catch (err) { $('expErr').textContent = why(null, err); b.disabled = false; }
 };
 
 /* ============================ catalog =========================== */
