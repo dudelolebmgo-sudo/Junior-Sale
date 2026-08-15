@@ -96,6 +96,14 @@
   .adm{border:1px solid var(--line);border-radius:var(--r);padding:10px;margin-top:10px;
     display:grid;grid-template-columns:1fr 84px 40px;gap:8px;align-items:center}
   .adm input{padding:9px 10px}
+  .rec{border:1px solid var(--line);border-radius:var(--r);padding:11px 12px;margin-top:8px;
+    display:flex;justify-content:space-between;align-items:center;gap:10px}
+  .rec .l{min-width:0}
+  .rec .n{font-weight:600;font-size:15px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .rec .d{color:var(--muted);font-size:13px}
+  .rec .v{border:1px solid var(--line);background:var(--paper);color:var(--red);
+    border-radius:var(--r);padding:8px 12px;font-size:13px;cursor:pointer;flex:none}
+  .rec.gone{opacity:.4}
   .adm .x{border:0;background:transparent;color:var(--muted);font-size:20px;cursor:pointer}
 </style>
 </head>
@@ -192,16 +200,25 @@
   <div class="err" id="admErr"></div>
 </section>
 
+<!-- 5. Recent sales / void -->
+<section id="v-recent" class="hide">
+  <h1>Recent sales</h1>
+  <p class="sub">Voiding appends a reversing entry. Nothing is ever deleted.</p>
+  <div id="recList"></div>
+  <button class="btn ghost" id="btnRecBack">Back to sales</button>
+  <div class="err" id="recErr"></div>
+</section>
+
 <div class="bar hide" id="bar">
   <div class="inner">
     <span class="sync"><span class="led" id="led"></span><span id="syncTxt">Synced</span></span>
-    <span><a id="lnkAdmin" class="hide">Catalog</a> &nbsp; <a id="lnkOut">Sign out</a></span>
+    <span><a id="lnkRecent">Recent</a> &nbsp; <a id="lnkAdmin" class="hide">Catalog</a> &nbsp; <a id="lnkOut">Sign out</a></span>
   </div>
 </div>
 
 <script>
 /* ============================ config ============================ */
-const API_URL = 'https://script.google.com/macros/s/AKfycbztK6Uzn4xoERH16tdvuJ8G_kD4I70whr7FHZTSdBN9d0LqpAwKDoXlh1prCeVXdp0W6w/exec';
+const API_URL = 'https://junior-sale.dudelolebmgo.workers.dev';
 const IDLE_MS = 30 * 60 * 1000;
 const FLUSH_MS = 2000;
 
@@ -255,20 +272,28 @@ async function outboxAll(){
 }
 
 /* ============================ api =============================== */
-/* text/plain avoids the CORS preflight that Apps Script cannot answer. */
+/* The Worker sends proper CORS headers, so this is a plain JSON POST and
+   failures come back with a readable reason instead of an opaque error. */
 async function api(action, payload = {}){
-  const r = await fetch(API_URL, {
-    method:'POST', redirect:'follow',
-    headers:{ 'Content-Type':'text/plain;charset=utf-8' },
-    body: JSON.stringify(Object.assign({ action, token:S.token, client_id:clientId }, payload))
+  const r = await fetch(API_URL + '/' + action, {
+    method:'POST',
+    headers:{ 'Content-Type':'application/json' },
+    body: JSON.stringify(Object.assign({ token:S.token, client_id:clientId }, payload))
   });
-  if (!r.ok) throw new Error('http_' + r.status);
-  return r.json();
+  let j = null;
+  try { j = await r.json(); } catch (e) { throw new Error('http_' + r.status + ' (unreadable response)'); }
+  if (!r.ok && !j) throw new Error('http_' + r.status);
+  return j;
+}
+function why(r, err){
+  if (err) return err.message || String(err);
+  if (!r) return 'no response';
+  return r.detail ? r.error + ': ' + r.detail : (r.error || 'unknown');
 }
 
 /* ============================ views ============================= */
 function show(v){
-  ['pin','session','sale','admin'].forEach(n => $('v-'+n).classList.toggle('hide', n !== v));
+  ['pin','session','sale','admin','recent'].forEach(n => $('v-'+n).classList.toggle('hide', n !== v));
   $('bar').classList.toggle('hide', v === 'pin');
   window.scrollTo(0,0);
 }
@@ -322,7 +347,7 @@ async function login(){
     show('session');
     touch();
   } catch (err) {
-    $('pinErr').textContent = 'No connection. Check the network and try again.';
+    $('pinErr').textContent = 'Cannot reach the server — ' + why(null, err);
   }
 }
 
@@ -334,13 +359,13 @@ $('btnSession').onclick = async () => {
   $('sesErr').textContent = ''; $('btnSession').disabled = true;
   try {
     const r = await api('openSession', { date, bs_rate: rate });
-    if (!r.ok) { $('sesErr').textContent = 'Could not open the session.'; return; }
+    if (!r.ok) { $('sesErr').textContent = 'Could not open the session — ' + why(r); return; }
     S.session = r.session;
     $('saleMeta').textContent = S.seller.first_name + ' · ' + r.session.date
       + ' · ' + r.session.bs_rate + ' Bs/$';
     renderGrid(); show('sale'); $('fStudent').focus();
   } catch (err) {
-    $('sesErr').textContent = 'No connection. The session must be opened online.';
+    $('sesErr').textContent = 'Cannot reach the server — ' + why(null, err);
   } finally { $('btnSession').disabled = false; }
 };
 
@@ -513,7 +538,7 @@ $('btnConfirm').onclick = async () => {
     }
     return {
       entry_id: uuid(), session_id: S.session.session_id,
-      timestamp: new Date().toISOString(),
+      ts: new Date().toISOString(),
       student_id: S.student.student_id, type:'SALE',
       product_id: l.id, qty: l.qty, amount_usd: l.amount,
       payment_method: S.method,
@@ -579,7 +604,7 @@ $('btnPay').onclick = async () => {
   const bs = S.payMethod === 'BS' ? parseFloat($('fPayBs').value) : '';
   const en = {
     entry_id: uuid(), session_id: S.session.session_id,
-    timestamp: new Date().toISOString(),
+    ts: new Date().toISOString(),
     student_id: S.student.student_id, type:'PAYMENT',
     product_id:'', qty:'', amount_usd: amt, payment_method: S.payMethod,
     bs_amount: bs, bs_rate_used: S.payMethod === 'BS' ? S.session.bs_rate : '',
@@ -649,6 +674,45 @@ window.addEventListener('beforeunload', e => {
   if (S.pending > 0) { e.preventDefault(); e.returnValue = ''; }
 });
 
+/* ========================= recent / void ======================== */
+$('lnkRecent').onclick = async () => {
+  show('recent');
+  $('recList').innerHTML = '<p class="sub">Loading…</p>';
+  $('recErr').textContent = '';
+  if (S.pending > 0) { $('recErr').textContent = S.pending + ' sale(s) still syncing — they will appear once green.'; }
+  try {
+    const r = await api('recent', { session_id: S.session ? S.session.session_id : '' });
+    if (!r.ok) { $('recList').innerHTML = ''; $('recErr').textContent = why(r); return; }
+    if (!r.entries.length) { $('recList').innerHTML = '<p class="sub">Nothing recorded yet today.</p>'; return; }
+    $('recList').innerHTML = r.entries.map(e => {
+      const who = ((e.first_name || '') + ' ' + (e.last_name || '')).trim() || 'Unknown';
+      const what = e.type === 'PAYMENT' ? 'Payment'
+        : (e.product || 'Item') + (e.qty > 1 ? ' ×' + e.qty : '');
+      const how = e.payment_method === 'DEBT' ? 'on debt'
+        : e.payment_method === 'BS' ? 'in bolívares' : 'cash';
+      return `<div class="rec" data-id="${e.entry_id}">
+        <span class="l"><span class="n">${who}</span>
+        <span class="d">${what} · ${money(e.amount_usd)} · ${how} · ${new Date(e.ts).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})}</span></span>
+        <button class="v">Void</button></div>`;
+    }).join('');
+  } catch (err) { $('recList').innerHTML = ''; $('recErr').textContent = why(null, err); }
+};
+$('btnRecBack').onclick = () => show('sale');
+$('recList').onclick = async e => {
+  const b = e.target.closest('.v'); if (!b) return;
+  const row = b.closest('.rec');
+  if (!confirm('Void this entry? A reversing row will be added.')) return;
+  b.disabled = true; b.textContent = 'Voiding…';
+  try {
+    const r = await api('voidEntry', { entry_id: row.dataset.id });
+    if (!r.ok) { $('recErr').textContent = why(r); b.disabled = false; b.textContent = 'Void'; return; }
+    S.balances = r.balances;
+    row.classList.add('gone'); b.remove();
+    if (S.student) renderStudent();
+    toast('Voided.');
+  } catch (err) { $('recErr').textContent = why(null, err); b.disabled = false; b.textContent = 'Void'; }
+};
+
 /* ============================ catalog =========================== */
 $('lnkAdmin').onclick = () => { renderAdmin(); show('admin'); };
 $('btnAdminBack').onclick = () => show('sale');
@@ -684,7 +748,7 @@ $('btnSaveProd').onclick = async () => {
       ? 'Only Erik and Santiago can change the catalog.' : 'Could not save.'; return; }
     S.products = r.products; renderGrid(); renderAdmin();
     toast('Catalog saved.');
-  } catch (e) { $('admErr').textContent = 'No connection. Try again when online.'; }
+  } catch (e) { $('admErr').textContent = 'Cannot reach the server — ' + why(null, e); }
   finally { $('btnSaveProd').disabled = false; }
 };
 
