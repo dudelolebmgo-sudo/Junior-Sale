@@ -1,0 +1,921 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
+<title>Junior Sale</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#f3f2f8; --card:#fff; --ink:#191627; --muted:#6e6880; --line:#e4e1ee;
+    --brand:#5b2bd9; --brand-deep:#3f1ba0; --brand-soft:#efe9fe;
+    --ok:#0b7a4b; --ok-soft:#e3f5ec;
+    --warn:#b06e05; --warn-soft:#fdf1dc;
+    --bad:#c22e24; --bad-soft:#fceae8;
+    --pad:16px; --r:12px; --r-sm:9px;
+    --display:"Bricolage Grotesque",-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+    --ui:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+    --shadow:0 1px 2px rgba(25,22,39,.05),0 4px 14px rgba(25,22,39,.05);
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html,body{margin:0;background:var(--bg);color:var(--ink);
+    font:400 16px/1.45 var(--ui);font-variant-numeric:tabular-nums;
+    -webkit-font-smoothing:antialiased}
+  body{padding:0 var(--pad) 104px;max-width:520px;margin:0 auto}
+  h1{font-family:var(--display);font-size:28px;font-weight:800;letter-spacing:-.02em;
+    margin:26px 0 4px;line-height:1.1}
+  .sub{color:var(--muted);font-size:14px;margin:0 0 20px}
+  label{display:block;font-size:12px;font-weight:600;letter-spacing:.04em;
+    text-transform:uppercase;color:var(--muted);margin:20px 0 8px}
+  input,select,button{font:inherit;font-variant-numeric:tabular-nums}
+  input{width:100%;padding:14px 13px;border:1px solid var(--line);border-radius:var(--r-sm);
+    background:var(--card);color:var(--ink);transition:border-color .15s,box-shadow .15s}
+  input:focus{outline:0;border-color:var(--brand);box-shadow:0 0 0 3px var(--brand-soft)}
+  button:focus-visible,a:focus-visible{outline:2px solid var(--brand);outline-offset:2px}
+  .hide{display:none!important}
+
+  .chips{display:flex;flex-wrap:wrap;gap:6px;margin:0 0 20px;padding:0}
+  .chip{font-size:12.5px;font-weight:600;padding:5px 10px;border-radius:99px;
+    background:var(--card);border:1px solid var(--line);color:var(--muted)}
+  .chip.brand{background:var(--brand-soft);border-color:transparent;color:var(--brand-deep)}
+
+  .btn{width:100%;min-height:54px;border:0;border-radius:var(--r-sm);background:var(--brand);
+    color:#fff;font-weight:700;cursor:pointer;margin-top:22px;letter-spacing:.01em;
+    transition:transform .1s,background .15s;box-shadow:var(--shadow)}
+  .btn:active{transform:scale(.985)}
+  .btn:disabled{background:#dedae8;color:#9a93aa;cursor:not-allowed;box-shadow:none}
+  .btn.ghost{background:var(--card);color:var(--ink);border:1px solid var(--line);font-weight:600}
+
+  /* keypad */
+  .dots{display:flex;gap:14px;justify-content:center;margin:34px 0 26px}
+  .dot{width:15px;height:15px;border-radius:50%;border:2px solid var(--line);
+    transition:background .15s,border-color .15s,transform .15s}
+  .dot.on{background:var(--brand);border-color:var(--brand);transform:scale(1.12)}
+  .pad{display:grid;grid-template-columns:repeat(3,1fr);gap:11px}
+  .pad button{min-height:64px;border:1px solid var(--line);border-radius:var(--r-sm);
+    background:var(--card);font-size:23px;font-weight:600;cursor:pointer;
+    box-shadow:var(--shadow);transition:transform .08s,background .12s}
+  .pad button:active{background:var(--brand-soft);transform:scale(.95)}
+
+  /* student picker */
+  .results{border-radius:var(--r-sm);margin-top:8px;overflow:hidden;box-shadow:var(--shadow);
+    border:1px solid var(--line);background:var(--card)}
+  .results button{display:block;width:100%;text-align:left;padding:14px 13px;border:0;
+    border-bottom:1px solid var(--line);background:var(--card);cursor:pointer;font-weight:600}
+  .results button:last-child{border-bottom:0}
+  .results button:active{background:var(--brand-soft)}
+  .results .sec{display:block;color:var(--muted);font-size:13px;font-weight:400;margin-top:2px}
+  .results .add{color:var(--brand-deep)}
+
+  /* selected student */
+  .who{background:var(--card);border:1px solid var(--line);border-radius:var(--r);
+    padding:15px;margin-top:18px;box-shadow:var(--shadow)}
+  .who .row{display:flex;justify-content:space-between;align-items:baseline;gap:10px}
+  .who .nm{font-family:var(--display);font-weight:700;font-size:19px;letter-spacing:-.01em}
+  .who .bal{font-size:14px;font-weight:600;color:var(--muted);white-space:nowrap}
+
+  /* SIGNATURE: one segment per dollar of the $20 limit.
+     Countable at a glance — a seller can see how much room is left. */
+  .gauge{display:flex;gap:2px;margin-top:13px;height:12px}
+  .gauge i{flex:1;background:#e9e6f2;border-radius:2px;transition:background .2s}
+  .gauge i:first-child{border-radius:4px 2px 2px 4px}
+  .gauge i:last-child{border-radius:2px 4px 4px 2px}
+  .gauge.ok   i.f{background:var(--ok)}
+  .gauge.warn i.f{background:var(--warn)}
+  .gauge.over i.f{background:var(--bad)}
+  .gnote{margin-top:8px;font-size:13px;font-weight:600;color:var(--muted)}
+  .gauge.warn ~ .gnote{color:var(--warn)}
+  .gauge.over ~ .gnote{color:var(--bad)}
+
+  .blocked{margin-top:13px;padding:12px 13px;border-radius:var(--r-sm);
+    background:var(--bad-soft);color:var(--bad);font-size:14px;font-weight:600;
+    border-left:3px solid var(--bad)}
+
+  /* products */
+  .grid{display:grid;grid-template-columns:1fr 1fr;gap:11px}
+  .grid button{min-height:74px;border:1.5px solid var(--line);border-radius:var(--r-sm);
+    background:var(--card);cursor:pointer;padding:12px;text-align:left;position:relative;
+    box-shadow:var(--shadow);transition:transform .08s,border-color .12s,background .12s}
+  .grid button:active{transform:scale(.97)}
+  .grid button.on{border-color:var(--brand);background:var(--brand-soft)}
+  .grid .pn{display:block;font-size:15.5px;font-weight:600;padding-right:26px}
+  .grid .pp{display:inline-block;color:var(--muted);font-size:12.5px;font-weight:600;
+    margin-top:6px;background:var(--bg);padding:2px 7px;border-radius:99px}
+  .grid button.on .pp{background:#fff;color:var(--brand-deep)}
+  .grid .qty{position:absolute;top:9px;right:9px;min-width:24px;height:24px;
+    background:var(--brand);color:#fff;border-radius:99px;font-size:13px;font-weight:700;
+    display:flex;align-items:center;justify-content:center;padding:0 6px}
+
+  /* payment */
+  .pay{display:grid;grid-template-columns:repeat(3,1fr);gap:9px}
+  .pay button{min-height:54px;border:1.5px solid var(--line);border-radius:var(--r-sm);
+    background:var(--card);cursor:pointer;font-size:14px;font-weight:600;
+    box-shadow:var(--shadow);transition:transform .08s,border-color .12s,background .12s}
+  .pay button:active{transform:scale(.97)}
+  .pay button.on{border-color:var(--brand);background:var(--brand-soft);color:var(--brand-deep)}
+  .conv{font-size:13px;font-weight:600;color:var(--muted);margin-top:8px}
+  .conv.bad{color:var(--bad)}
+
+  .total{display:flex;justify-content:space-between;align-items:baseline;
+    margin-top:24px;padding-top:16px;border-top:1px solid var(--line)}
+  .total .lbl{color:var(--muted);font-size:12px;font-weight:600;
+    letter-spacing:.04em;text-transform:uppercase}
+  .total .amt{font-family:var(--display);font-size:40px;font-weight:800;letter-spacing:-.03em}
+
+  /* chrome */
+  .bar{position:fixed;left:0;right:0;bottom:0;background:rgba(255,255,255,.92);
+    backdrop-filter:blur(12px);border-top:1px solid var(--line);
+    padding:11px var(--pad);padding-bottom:calc(11px + env(safe-area-inset-bottom));
+    font-size:13px;color:var(--muted)}
+  .bar .inner{width:100%;max-width:520px;margin:0 auto;display:flex;gap:10px;
+    align-items:center;justify-content:space-between}
+  .bar a{color:var(--brand-deep);cursor:pointer;font-weight:600;text-decoration:none}
+  .sync{display:inline-flex;align-items:center;gap:7px;font-weight:600}
+  .led{width:9px;height:9px;border-radius:50%;background:var(--ok);flex:none}
+  .led.pending{background:var(--warn);animation:pulse 1.4s ease-in-out infinite}
+  .led.err{background:var(--bad)}
+  @keyframes pulse{50%{opacity:.35}}
+
+  .toast{position:fixed;left:50%;transform:translateX(-50%);bottom:76px;max-width:480px;
+    width:calc(100% - 32px);background:var(--ink);color:#fff;padding:13px 15px;
+    border-radius:var(--r-sm);font-size:14px;font-weight:600;z-index:20;
+    box-shadow:0 8px 28px rgba(25,22,39,.28);animation:rise .22s ease-out}
+  @keyframes rise{from{opacity:0;transform:translate(-50%,10px)}}
+
+  .err{color:var(--bad);font-size:14px;font-weight:600;margin-top:12px;min-height:20px}
+
+  /* catalog */
+  .adm{background:var(--card);border:1px solid var(--line);border-radius:var(--r-sm);
+    padding:11px;margin-top:9px;display:grid;grid-template-columns:1fr 88px 40px;gap:9px;
+    align-items:center;box-shadow:var(--shadow)}
+  .adm input{padding:10px}
+  .adm .x{border:0;background:transparent;color:var(--muted);font-size:22px;cursor:pointer}
+
+  /* recent */
+  .rec{background:var(--card);border:1px solid var(--line);border-radius:var(--r-sm);
+    padding:12px 13px;margin-top:9px;display:flex;justify-content:space-between;
+    align-items:center;gap:11px;box-shadow:var(--shadow)}
+  .rec .l{min-width:0}
+  .rec .n{font-weight:700;font-size:15px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .rec .d{display:block;color:var(--muted);font-size:13px;margin-top:2px}
+  .rec .v{border:1px solid var(--line);background:var(--card);color:var(--bad);
+    border-radius:var(--r-sm);padding:9px 13px;font-size:13px;font-weight:600;
+    cursor:pointer;flex:none}
+  .rec.gone{opacity:.4}
+
+  /* cart lines with steppers */
+  .lines{margin-top:14px}
+  .line{background:var(--card);border:1px solid var(--line);border-radius:var(--r-sm);
+    padding:10px 11px;margin-top:8px;display:flex;align-items:center;gap:10px;
+    box-shadow:var(--shadow)}
+  .line .ln{flex:1;min-width:0}
+  .line .lname{font-weight:600;font-size:15px;white-space:nowrap;overflow:hidden;
+    text-overflow:ellipsis}
+  .line .lprice{display:block;color:var(--muted);font-size:12.5px;margin-top:1px}
+  .step{display:flex;align-items:center;gap:2px;flex:none}
+  .step button{width:40px;height:40px;border:1.5px solid var(--line);background:var(--card);
+    border-radius:var(--r-sm);font-size:21px;font-weight:600;line-height:1;cursor:pointer;
+    color:var(--brand-deep);transition:transform .08s,background .12s}
+  .step button:active{background:var(--brand-soft);transform:scale(.92)}
+  .step .q{min-width:36px;text-align:center;font-weight:700;font-size:17px}
+  .empty{color:var(--muted);font-size:14px;padding:14px 2px}
+
+  /* outcome summary */
+  .outcome{margin-top:16px;padding:13px 14px;border-radius:var(--r-sm);
+    background:var(--brand-soft);border-left:3px solid var(--brand);
+    font-size:14.5px;font-weight:600;color:var(--brand-deep);line-height:1.4}
+  .outcome.ok{background:var(--ok-soft);border-color:var(--ok);color:var(--ok)}
+  .outcome.warn{background:var(--warn-soft);border-color:var(--warn);color:var(--warn)}
+  .outcome.bad{background:var(--bad-soft);border-color:var(--bad);color:var(--bad)}
+  .outcome b{font-weight:800}
+
+  /* bottom nav */
+  .bar{position:fixed;left:0;right:0;bottom:0;background:rgba(255,255,255,.94);
+    backdrop-filter:blur(14px);border-top:1px solid var(--line);
+    padding:8px var(--pad);padding-bottom:calc(8px + env(safe-area-inset-bottom))}
+  .nav{width:100%;max-width:520px;margin:0 auto;display:grid;
+    grid-template-columns:1fr auto auto auto;gap:7px;align-items:center}
+  .nav .sync{display:inline-flex;align-items:center;gap:7px;font-weight:600;
+    font-size:12.5px;color:var(--muted);min-width:0;overflow:hidden;
+    white-space:nowrap;text-overflow:ellipsis}
+  .nav button{border:1px solid var(--line);background:var(--card);color:var(--ink);
+    border-radius:99px;padding:9px 15px;font-size:13.5px;font-weight:700;cursor:pointer;
+    box-shadow:var(--shadow);transition:transform .08s,background .12s}
+  .nav button:active{background:var(--brand-soft);transform:scale(.95)}
+  .nav button.out{color:var(--bad)}
+
+  @media (max-width:380px){
+    .nav{grid-template-columns:1fr auto auto auto;gap:5px}
+    .nav button{padding:9px 11px;font-size:12.5px}
+  }
+
+  @media (prefers-reduced-motion:reduce){
+    *{animation:none!important;transition:none!important}
+  }
+</style>
+</head>
+<body>
+
+<!-- 1. PIN -->
+<section id="v-pin">
+  <h1>Junior sale</h1>
+  <p class="sub">Enter your seller PIN.</p>
+  <div class="dots" id="dots"></div>
+  <div class="pad" id="pad"></div>
+  <div class="err" id="pinErr"></div>
+</section>
+
+<!-- 2. Session -->
+<section id="v-session" class="hide">
+  <h1>Start the day</h1>
+  <p class="sub" id="sesWho"></p>
+  <label for="fDate">Date</label>
+  <input type="date" id="fDate">
+  <label for="fRate">Bolívar rate (Bs per $1)</label>
+  <input type="number" id="fRate" inputmode="decimal" step="0.01" min="0" placeholder="e.g. 235.50">
+  <p class="sub" id="sesNote" style="margin-top:10px"></p>
+  <button class="btn" id="btnSession">Open session</button>
+  <div class="err" id="sesErr"></div>
+</section>
+
+<!-- 3. Sale -->
+<section id="v-sale" class="hide">
+  <h1>New sale</h1>
+  <div class="chips" id="saleMeta"></div>
+
+  <label for="fStudent">Who is buying</label>
+  <input id="fStudent" autocomplete="off" autocapitalize="words" placeholder="Type a first and last name">
+  <div class="results hide" id="results"></div>
+
+  <div id="picked" class="hide">
+    <div class="who">
+      <div class="row"><span class="nm" id="whoName"></span><span class="bal" id="whoBal"></span></div>
+      <div class="gauge" id="gauge"></div>
+      <div class="gnote" id="gaugeNote"></div>
+      <div class="blocked hide" id="blocked"></div>
+    </div>
+
+    <div id="itemsArea">
+      <label>Add items</label>
+      <div class="grid" id="grid"></div>
+      <div class="lines" id="lines"></div>
+    </div>
+
+    <label>Paying with</label>
+    <div class="pay" id="payRow">
+      <button data-m="CASH_USD">Cash $</button>
+      <button data-m="BS">Bolivares</button>
+      <button data-m="DEBT">All on debt</button>
+    </div>
+
+    <div id="paidWrap">
+      <label for="fPaid" id="paidLabel">Amount handed over ($)</label>
+      <input type="number" id="fPaid" inputmode="decimal" step="0.01" min="0">
+      <div class="conv" id="paidConv"></div>
+    </div>
+
+    <div class="total"><span class="lbl">Items total</span><span class="amt" id="total">$0.00</span></div>
+    <div class="outcome" id="outcome"></div>
+
+    <button class="btn" id="btnConfirm" disabled>Confirm</button>
+    <button class="btn ghost" id="btnClear">Start over</button>
+  </div>
+  <div class="err" id="saleErr"></div>
+</section>
+
+<!-- 4. Catalog (admins) -->
+<section id="v-admin" class="hide">
+  <h1>Catalog</h1>
+  <p class="sub">Changes apply to every seller on their next login.</p>
+  <div id="admList"></div>
+  <button class="btn ghost" id="btnAddProd" style="min-height:44px">Add item</button>
+  <button class="btn" id="btnSaveProd">Save catalog</button>
+  <button class="btn ghost" id="btnAdminBack" style="margin-top:10px">Back to sales</button>
+  <div class="err" id="admErr"></div>
+</section>
+
+<!-- 5. Recent sales / void -->
+<section id="v-recent" class="hide">
+  <h1>Recent sales</h1>
+  <p class="sub">Voiding appends a reversing entry. Nothing is ever deleted.</p>
+  <div id="recList"></div>
+  <button class="btn ghost" id="btnRecBack">Back to sales</button>
+  <div class="err" id="recErr"></div>
+</section>
+
+<div class="bar hide" id="bar">
+  <div class="nav">
+    <span class="sync"><span class="led" id="led"></span><span id="syncTxt">Synced</span></span>
+    <button id="lnkRecent">Recent</button>
+    <button id="lnkAdmin" class="hide">Catalog</button>
+    <button id="lnkOut" class="out">Sign out</button>
+  </div>
+</div>
+
+<script>
+/* ============================ config ============================ */
+const API_URL = 'https://junior-sale.dudelolebmgo.workers.dev';
+const IDLE_MS = 30 * 60 * 1000;
+const FLUSH_MS = 2000;
+
+/* ============================ state ============================= */
+let S = {
+  token:null, seller:null, session:null,
+  products:[], students:[], balances:{},
+  limit:20, near:15,
+  student:null, cart:{}, method:null, payMethod:null,
+  pin:'', pending:0, lastAct:Date.now(), flushing:false
+};
+const $ = id => document.getElementById(id);
+const money = n => '$' + (Math.round(n*100)/100).toFixed(2);
+const uuid = () => (crypto.randomUUID ? crypto.randomUUID()
+  : 'x'+Date.now()+Math.random().toString(16).slice(2));
+const clientId = (() => {
+  let c = localStorage.getItem('jsx_client');
+  if (!c) { c = uuid(); localStorage.setItem('jsx_client', c); }
+  return c;
+})();
+
+/* ========================= outbox (IndexedDB) ==================== */
+/* Durable across tab crashes and reboots — a queued sale is never lost. */
+let DB;
+function db(){
+  return DB ? Promise.resolve(DB) : new Promise((res, rej) => {
+    const r = indexedDB.open('junior-sale', 1);
+    r.onupgradeneeded = () => r.result.createObjectStore('outbox', { keyPath:'id' });
+    r.onsuccess = () => { DB = r.result; res(DB); };
+    r.onerror = () => rej(r.error);
+  });
+}
+async function tx(mode, fn){
+  const d = await db();
+  return new Promise((res, rej) => {
+    const t = d.transaction('outbox', mode);
+    const out = fn(t.objectStore('outbox'));
+    t.oncomplete = () => res(out && out.result !== undefined ? out.result : out);
+    t.onerror = () => rej(t.error);
+  });
+}
+let seqN = 0;
+const nextSeq = () => Date.now() * 1000 + (seqN++ % 1000);
+const outboxPut  = rec  => tx('readwrite', st => st.put(Object.assign({ seq: nextSeq() }, rec)));
+const outboxDrop = ids  => tx('readwrite', st => ids.forEach(i => st.delete(i)));
+/* Keys are UUIDs, so getAll() comes back in key order, not insertion order.
+   Sorting by seq keeps a new student ahead of the sales that reference them. */
+async function outboxAll(){
+  const all = await tx('readonly', st => st.getAll());
+  return all.sort((a, b) => (a.seq || 0) - (b.seq || 0));
+}
+
+/* ============================ api =============================== */
+/* The Worker sends proper CORS headers, so this is a plain JSON POST and
+   failures come back with a readable reason instead of an opaque error. */
+async function api(action, payload = {}){
+  const r = await fetch(API_URL + '/' + action, {
+    method:'POST',
+    headers:{ 'Content-Type':'application/json' },
+    body: JSON.stringify(Object.assign({ token:S.token, client_id:clientId }, payload))
+  });
+  let j = null;
+  try { j = await r.json(); } catch (e) { throw new Error('http_' + r.status + ' (unreadable response)'); }
+  if (!r.ok && !j) throw new Error('http_' + r.status);
+  return j;
+}
+function why(r, err){
+  if (err) return err.message || String(err);
+  if (!r) return 'no response';
+  return r.detail ? r.error + ': ' + r.detail : (r.error || 'unknown');
+}
+
+/* ============================ views ============================= */
+function show(v){
+  ['pin','session','sale','admin','recent'].forEach(n => $('v-'+n).classList.toggle('hide', n !== v));
+  $('bar').classList.toggle('hide', v === 'pin');
+  window.scrollTo(0,0);
+}
+function toast(msg, ms = 3200){
+  let t = document.querySelector('.toast');
+  if (!t) { t = document.createElement('div'); t.className='toast'; document.body.appendChild(t); }
+  t.textContent = msg;
+  clearTimeout(t._h); t._h = setTimeout(() => t.remove(), ms);
+}
+
+/* ============================ PIN =============================== */
+function drawPin(){
+  $('dots').innerHTML = [0,1,2,3]
+    .map(i => `<span class="dot${i < S.pin.length ? ' on' : ''}"></span>`).join('');
+}
+$('pad').innerHTML = ['1','2','3','4','5','6','7','8','9','','0','⌫']
+  .map(k => k === '' ? '<span></span>' : `<button data-k="${k}">${k}</button>`).join('');
+$('pad').onclick = e => {
+  const k = e.target.dataset.k; if (!k) return;
+  $('pinErr').textContent = '';
+  if (k === '⌫') S.pin = S.pin.slice(0,-1);
+  else if (S.pin.length < 4) S.pin += k;
+  drawPin();
+  if (S.pin.length === 4) login();
+};
+drawPin();
+
+async function login(){
+  const pin = S.pin; S.pin = ''; drawPin();
+  $('pinErr').textContent = 'Checking…';
+  try {
+    const r = await api('auth', { pin });
+    if (!r.ok) {
+      $('pinErr').textContent = r.error === 'locked'
+        ? 'Too many wrong PINs. Wait five minutes.'
+        : 'That PIN did not match. Try again.';
+      return;
+    }
+    S.token = r.token; S.seller = r.seller;
+    S.products = r.products; S.students = r.students; S.balances = r.balances;
+    S.limit = r.debt_limit; S.near = r.near_limit; S.session = r.session;
+    $('pinErr').textContent = '';
+    $('lnkAdmin').classList.toggle('hide', !S.seller.is_admin);
+    $('sesWho').textContent = 'Signed in as ' + S.seller.first_name + ' ' + S.seller.last_name + '.';
+    $('fDate').value = r.session ? r.session.date : new Date().toISOString().slice(0,10);
+    if (r.session) {
+      $('fRate').value = r.session.bs_rate;
+      $('sesNote').textContent = 'A session is already open for this date at '
+        + r.session.bs_rate + ' Bs. Change the rate only if it moved.';
+    } else { $('sesNote').textContent = ''; }
+    show('session');
+    touch();
+  } catch (err) {
+    $('pinErr').textContent = 'Cannot reach the server — ' + why(null, err);
+  }
+}
+
+/* ============================ session =========================== */
+$('btnSession').onclick = async () => {
+  const date = $('fDate').value, rate = parseFloat($('fRate').value);
+  if (!date) { $('sesErr').textContent = 'Pick a date.'; return; }
+  if (!(rate > 0)) { $('sesErr').textContent = 'Enter the bolívar rate.'; return; }
+  $('sesErr').textContent = ''; $('btnSession').disabled = true;
+  try {
+    const r = await api('openSession', { date, bs_rate: rate });
+    if (!r.ok) { $('sesErr').textContent = 'Could not open the session — ' + why(r); return; }
+    S.session = r.session;
+    $('saleMeta').innerHTML = `<span class="chip">${S.seller.first_name}</span>`
+      + `<span class="chip">${r.session.date}</span>`
+      + `<span class="chip brand">${r.session.bs_rate} Bs/$</span>`;
+    renderGrid(); show('sale'); $('fStudent').focus();
+  } catch (err) {
+    $('sesErr').textContent = 'Cannot reach the server — ' + why(null, err);
+  } finally { $('btnSession').disabled = false; }
+};
+
+/* ======================= student type-ahead ===================== */
+function allStudents(){ return S.students; }
+function nameOf(s){ return (s.first_name + ' ' + s.last_name).trim(); }
+
+$('fStudent').oninput = () => {
+  touch();
+  const q = $('fStudent').value.trim().toLowerCase();
+  const box = $('results');
+  if (q.length < 2) { box.classList.add('hide'); return; }
+  const hits = allStudents()
+    .filter(s => nameOf(s).toLowerCase().includes(q))
+    .slice(0, 6);
+  const rows = hits.map(s => {
+    const bal = S.balances[s.student_id] || 0;
+    const tag = s.section ? ` · ${s.section}` : '';
+    const debt = bal > 0 ? ` · owes ${money(bal)}` : '';
+    return `<button data-id="${s.student_id}">${nameOf(s)}<span class="sec">${tag}${debt}</span></button>`;
+  });
+  rows.push(`<button class="add" data-new="1">Add “${$('fStudent').value.trim()}” as a new student</button>`);
+  box.innerHTML = rows.join(''); box.classList.remove('hide');
+};
+
+$('results').onclick = e => {
+  const b = e.target.closest('button'); if (!b) return;
+  if (b.dataset.new) return addStudent();
+  pick(allStudents().find(s => String(s.student_id) === b.dataset.id));
+};
+
+function addStudent(){
+  const raw = $('fStudent').value.trim().replace(/\s+/g,' ');
+  const parts = raw.split(' ');
+  if (parts.length < 2) { $('saleErr').textContent = 'Type a first name and a last name.'; return; }
+  const section = prompt('Section or grade for ' + raw + ' (optional, helps tell same names apart):') || '';
+  const s = {
+    student_id: uuid(), first_name: parts[0],
+    last_name: parts.slice(1).join(' '), section: section.trim(), _new: true
+  };
+  S.students.push(s);
+  outboxPut({ id:s.student_id, kind:'student', payload:s });
+  updatePending();
+  pick(s);
+}
+
+function pick(st){
+  if (!st) return;
+  S.student = st; S.cart = {}; S.method = null;
+  $('fStudent').value = nameOf(st);
+  $('results').classList.add('hide');
+  $('picked').classList.remove('hide');
+  $('fPaid').value = ''; $('paidConv').textContent = '';
+  $('saleErr').textContent = '';
+  renderStudent(); renderGrid(); renderLines(); renderPay(); renderTotal();
+}
+
+const balOf = () => S.balances[S.student.student_id] || 0;
+
+function renderStudent(){
+  const bal = balOf();
+  const over = bal >= S.limit;
+  $('whoName').textContent = nameOf(S.student) + (S.student.section ? ' · ' + S.student.section : '');
+  $('whoBal').textContent = bal > 0 ? `${money(bal)} in debt`
+    : bal < 0 ? `${money(-bal)} credit` : 'Clear';
+
+  /* One segment per dollar of the $20 debt limit, so a seller can count
+     how much room is left instead of reading a number. */
+  const filled = bal <= 0 ? 0 : Math.min(Math.ceil(bal), S.limit);
+  const g = $('gauge');
+  g.className = 'gauge ' + (over ? 'over' : bal >= S.near ? 'warn' : 'ok');
+  g.innerHTML = Array.from({ length: S.limit },
+    (_, i) => `<i class="${i < filled ? 'f' : ''}"></i>`).join('');
+  $('gaugeNote').textContent = over ? 'At the $20 debt limit'
+    : bal < 0 ? `${money(-bal)} in credit`
+    : `${money(S.limit - bal)} before the ${money(S.limit)} limit`;
+
+  // At the limit: no items, payment only. Pay first, then sell separately.
+  $('blocked').classList.toggle('hide', !over);
+  $('blocked').textContent = over
+    ? `${S.student.first_name} is at the ${money(S.limit)} limit. Take a payment first, then start a new sale.`
+    : '';
+  $('itemsArea').classList.toggle('hide', over);
+  if (over) { S.cart = {}; S.method = 'CASH_USD'; }
+  $('payRow').querySelector('[data-m="DEBT"]').classList.toggle('hide', over);
+  $('payRow').style.gridTemplateColumns = over ? '1fr 1fr' : 'repeat(3,1fr)';
+}
+
+/* ============================ cart ============================== */
+function renderGrid(){
+  $('grid').innerHTML = S.products.map(p => {
+    const q = S.cart[p.product_id] || 0;
+    return `<button data-p="${p.product_id}" class="${q ? 'on' : ''}">
+      <span class="pn">${p.name}</span><span class="pp">${money(p.price_usd)}</span>
+      ${q ? `<span class="qty">${q}</span>` : ''}</button>`;
+  }).join('');
+}
+$('grid').onclick = e => {
+  const b = e.target.closest('button'); if (!b) return;
+  touch();
+  const id = b.dataset.p;
+  S.cart[id] = (S.cart[id] || 0) + 1;
+  renderGrid(); renderLines(); renderTotal();
+};
+
+function renderLines(){
+  const ids = Object.keys(S.cart);
+  if (!ids.length) {
+    $('lines').innerHTML = '<p class="empty">No items yet. Tap one above to add it.</p>';
+    return;
+  }
+  $('lines').innerHTML = ids.map(id => {
+    const p = S.products.find(x => String(x.product_id) === id);
+    if (!p) return '';
+    const q = S.cart[id];
+    return `<div class="line" data-p="${id}">
+      <span class="ln"><span class="lname">${p.name}</span>
+      <span class="lprice">${money(p.price_usd)} each · ${money(p.price_usd * q)}</span></span>
+      <span class="step">
+        <button data-d="-1" aria-label="One less">−</button>
+        <span class="q">${q}</span>
+        <button data-d="1" aria-label="One more">+</button>
+      </span></div>`;
+  }).join('');
+}
+$('lines').onclick = e => {
+  const b = e.target.closest('button[data-d]'); if (!b) return;
+  touch();
+  const id = b.closest('.line').dataset.p;
+  S.cart[id] = (S.cart[id] || 0) + Number(b.dataset.d);
+  if (S.cart[id] <= 0) delete S.cart[id];
+  renderGrid(); renderLines(); renderTotal();
+};
+
+$('btnClear').onclick = () => {
+  S.cart = {}; S.method = null; $('fPaid').value = ''; $('paidConv').textContent = '';
+  renderStudent(); renderGrid(); renderLines(); renderPay(); renderTotal();
+};
+
+function cartTotal(){
+  return r2(Object.keys(S.cart).reduce((sum, id) => {
+    const p = S.products.find(x => String(x.product_id) === id);
+    return sum + (p ? Number(p.price_usd) * S.cart[id] : 0);
+  }, 0));
+}
+const r2 = n => Math.round((Number(n) + Number.EPSILON) * 100) / 100;
+
+/* ========================== payment ============================= */
+function renderPay(){
+  document.querySelectorAll('#payRow [data-m]').forEach(b =>
+    b.classList.toggle('on', b.dataset.m === S.method));
+  const debt = S.method === 'DEBT';
+  $('paidWrap').classList.toggle('hide', debt || !S.method);
+  $('paidLabel').textContent = S.method === 'BS'
+    ? 'Bolivares handed over' : 'Amount handed over ($)';
+}
+$('payRow').onclick = e => {
+  const b = e.target.closest('[data-m]'); if (!b) return;
+  touch(); S.method = b.dataset.m;
+  if (S.method !== 'DEBT' && !$('fPaid').value) {
+    const t = cartTotal();
+    if (t > 0) $('fPaid').value = S.method === 'BS' ? r2(t * S.session.bs_rate) : t;
+  }
+  renderPay(); renderTotal();
+};
+$('fPaid').oninput = () => { touch(); renderTotal(); };
+
+/* How much the student actually handed over, in dollars. */
+function paidUsd(){
+  if (S.method === 'DEBT' || !S.method) return 0;
+  const v = parseFloat($('fPaid').value);
+  if (!(v > 0)) return 0;
+  return S.method === 'BS' ? r2(v / S.session.bs_rate) : r2(v);
+}
+
+function renderTotal(){
+  const total = cartTotal();
+  const paid  = paidUsd();
+  const bal   = balOf();
+  const delta = r2(total - paid);
+  const newBal = r2(bal + delta);
+
+  $('total').textContent = money(total);
+
+  if (S.method === 'BS') {
+    const bs = parseFloat($('fPaid').value);
+    $('paidConv').textContent = bs > 0
+      ? `${bs.toLocaleString()} Bs ÷ ${S.session.bs_rate} = ${money(paid)}` : '';
+    const off = total > 0 && bs > 0 ? Math.abs(paid - total) / total : 0;
+    $('paidConv').className = 'conv' + (off > 5 ? ' bad' : '');
+    if (off > 5) $('paidConv').textContent += ' — check that amount';
+  } else { $('paidConv').textContent = ''; }
+
+  const o = $('outcome');
+  const name = S.student ? S.student.first_name : 'They';
+  let cls = 'outcome', msg = '';
+
+  if (!S.method) {
+    msg = 'Choose how they are paying.';
+  } else if (total === 0 && paid === 0) {
+    msg = 'Add items, or enter an amount to record a payment.';
+  } else if (newBal > S.limit) {
+    cls += ' bad';
+    msg = `Too much. ${name} would owe <b>${money(newBal)}</b>, over the ${money(S.limit)} limit. Take more payment or remove items.`;
+  } else if (newBal > 0) {
+    cls += newBal >= S.near ? ' warn' : '';
+    msg = total === 0
+      ? `${name} will still owe <b>${money(newBal)}</b> after this payment.`
+      : `${name} will owe <b>${money(newBal)}</b> after this.`;
+  } else if (newBal < 0) {
+    cls += ' ok';
+    msg = `${name} will have <b>${money(-newBal)}</b> in credit. Give change instead? Lower the amount handed over.`;
+  } else {
+    cls += ' ok';
+    msg = `${name} will be all square. Nothing owed.`;
+  }
+  o.className = cls; o.innerHTML = msg;
+
+  const something = total > 0 || paid > 0;
+  $('btnConfirm').disabled = !S.method || !something || newBal > S.limit;
+  $('btnConfirm').textContent = total === 0 && paid > 0 ? 'Record payment' : 'Confirm sale';
+}
+
+/* =========================== confirm ============================ */
+$('btnConfirm').onclick = async () => {
+  touch();
+  const total = cartTotal();
+  const paid  = paidUsd();
+  const bal   = balOf();
+  const delta = r2(total - paid);
+
+  // Only block on a fresh balance when this pushes them near the limit.
+  if (delta > 0 && bal + delta > S.near) {
+    $('btnConfirm').disabled = true; $('btnConfirm').textContent = 'Checking…';
+    try {
+      const r = await api('balances');
+      if (r.ok) { S.balances = r.balances; S.students = r.students.concat(S.students.filter(x => x._new)); }
+    } catch (e) { /* offline: proceed on the cached balance */ }
+    renderStudent(); renderPay(); renderTotal();
+    if (balOf() + delta > S.limit) {
+      $('saleErr').textContent = `That would put ${S.student.first_name} over ${money(S.limit)}. Take more payment.`;
+      return;
+    }
+  }
+
+  const entries = [];
+  const sessionId = S.session.session_id;
+  const now = () => new Date().toISOString();
+
+  // Payment first — it must count before any charge is checked against the limit.
+  if (paid > 0) {
+    entries.push({
+      entry_id: uuid(), session_id: sessionId, ts: now(),
+      student_id: S.student.student_id, type: 'PAYMENT',
+      product_id: '', qty: '', amount_usd: paid,
+      payment_method: S.method,
+      bs_amount: S.method === 'BS' ? parseFloat($('fPaid').value) : '',
+      bs_rate_used: S.method === 'BS' ? S.session.bs_rate : '',
+      debt_delta: -paid, note: ''
+    });
+  }
+
+  for (const id of Object.keys(S.cart)) {
+    const p = S.products.find(x => String(x.product_id) === id);
+    if (!p) continue;
+    const amount = r2(Number(p.price_usd) * S.cart[id]);
+    entries.push({
+      entry_id: uuid(), session_id: sessionId, ts: now(),
+      student_id: S.student.student_id, type: 'SALE',
+      product_id: id, qty: S.cart[id], amount_usd: amount,
+      payment_method: S.method === 'DEBT' ? 'DEBT' : S.method,
+      bs_amount: '', bs_rate_used: '',
+      debt_delta: amount, note: ''
+    });
+  }
+
+  for (const en of entries) await outboxPut({ id: en.entry_id, kind: 'entry', payload: en });
+  S.balances[S.student.student_id] = r2(bal + delta);
+  updatePending(); flush();
+
+  const newBal = r2(bal + delta);
+  toast(total > 0
+    ? `${money(total)} for ${S.student.first_name}. ` +
+      (newBal > 0 ? `Owes ${money(newBal)}.` : newBal < 0 ? `${money(-newBal)} credit.` : 'All square.')
+    : `${money(paid)} payment from ${S.student.first_name}. ` +
+      (newBal > 0 ? `Owes ${money(newBal)}.` : 'All square.'));
+  reset();
+};
+
+function reset(){
+  S.student = null; S.cart = {}; S.method = null;
+  $('fStudent').value = ''; $('fPaid').value = ''; $('paidConv').textContent = '';
+  $('picked').classList.add('hide'); $('results').classList.add('hide');
+  $('saleErr').textContent = '';
+  $('fStudent').focus();
+}
+
+/* ============================ sync ============================== */
+async function flush(){
+  if (S.flushing || !S.token || !navigator.onLine) return;
+  const all = await outboxAll();
+  if (!all.length) return;
+  S.flushing = true;
+  try {
+    const batch = all.slice(0, 20);
+    const r = await api('commit', {
+      session_id: S.session ? S.session.session_id : '',
+      new_students: batch.filter(x => x.kind === 'student').map(x => x.payload),
+      entries:      batch.filter(x => x.kind === 'entry').map(x => x.payload)
+    });
+    if (!r.ok) { setLed('err', r.error === 'busy' ? 'Retrying…' : 'Sync problem'); return; }
+
+    const bad = r.rejected || [];
+    const permanent = ['over_limit','would_exceed_limit','missing_id'];
+    const dropIds = batch.filter(x => x.kind === 'student').map(x => x.id)
+      .concat(r.accepted || [])
+      .concat(bad.filter(b => permanent.includes(b.reason)).map(b => b.entry_id));
+
+    /* A transient rejection (the student row has not landed yet) is requeued,
+       not discarded. Give up after three tries so it cannot loop forever. */
+    for (const b of bad.filter(x => !permanent.includes(x.reason))) {
+      const rec = batch.find(x => x.id === b.entry_id);
+      if (!rec) continue;
+      if ((rec.tries || 0) >= 2) { dropIds.push(rec.id); toast('An entry could not be saved. Check the sheet.', 6000); }
+      else await outboxPut(Object.assign({}, rec, { tries: (rec.tries || 0) + 1 }));
+    }
+
+    await outboxDrop(dropIds);
+    if (r.balances) S.balances = r.balances;
+    const overs = bad.filter(b => permanent.includes(b.reason));
+    if (overs.length) toast(`${overs.length} sale(s) rejected — debt limit reached. Collect payment.`, 6000);
+    if (S.student) renderStudent();
+    updatePending();
+  } catch (e) {
+    setLed('err', 'Offline — queued');
+  } finally { S.flushing = false; }
+}
+
+async function updatePending(){
+  const all = await outboxAll();
+  S.pending = all.length;
+  if (S.pending === 0) setLed('', 'Synced');
+  else setLed('pending', S.pending + ' waiting to sync');
+}
+function setLed(cls, txt){
+  $('led').className = 'led' + (cls ? ' ' + cls : '');
+  $('syncTxt').textContent = txt;
+}
+setInterval(flush, FLUSH_MS);
+window.addEventListener('online', flush);
+window.addEventListener('beforeunload', e => {
+  if (S.pending > 0) { e.preventDefault(); e.returnValue = ''; }
+});
+
+/* ========================= recent / void ======================== */
+$('lnkRecent').onclick = async () => {
+  show('recent');
+  $('recList').innerHTML = '<p class="sub">Loading…</p>';
+  $('recErr').textContent = '';
+  if (S.pending > 0) { $('recErr').textContent = S.pending + ' sale(s) still syncing — they will appear once green.'; }
+  try {
+    const r = await api('recent', { session_id: S.session ? S.session.session_id : '' });
+    if (!r.ok) { $('recList').innerHTML = ''; $('recErr').textContent = why(r); return; }
+    if (!r.entries.length) { $('recList').innerHTML = '<p class="sub">Nothing recorded yet today.</p>'; return; }
+    $('recList').innerHTML = r.entries.map(e => {
+      const who = ((e.first_name || '') + ' ' + (e.last_name || '')).trim() || 'Unknown';
+      const what = e.type === 'PAYMENT' ? 'Payment'
+        : (e.product || 'Item') + (e.qty > 1 ? ' ×' + e.qty : '');
+      const how = e.payment_method === 'DEBT' ? 'on debt'
+        : e.payment_method === 'BS' ? 'in bolívares' : 'cash';
+      return `<div class="rec" data-id="${e.entry_id}">
+        <span class="l"><span class="n">${who}</span>
+        <span class="d">${what} · ${money(e.amount_usd)} · ${how} · ${new Date(e.ts).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})}</span></span>
+        <button class="v">Void</button></div>`;
+    }).join('');
+  } catch (err) { $('recList').innerHTML = ''; $('recErr').textContent = why(null, err); }
+};
+$('btnRecBack').onclick = () => show('sale');
+$('recList').onclick = async e => {
+  const b = e.target.closest('.v'); if (!b) return;
+  const row = b.closest('.rec');
+  if (!confirm('Void this entry? A reversing row will be added.')) return;
+  b.disabled = true; b.textContent = 'Voiding…';
+  try {
+    const r = await api('voidEntry', { entry_id: row.dataset.id });
+    if (!r.ok) { $('recErr').textContent = why(r); b.disabled = false; b.textContent = 'Void'; return; }
+    S.balances = r.balances;
+    row.classList.add('gone'); b.remove();
+    if (S.student) renderStudent();
+    toast('Voided.');
+  } catch (err) { $('recErr').textContent = why(null, err); b.disabled = false; b.textContent = 'Void'; }
+};
+
+/* ============================ catalog =========================== */
+$('lnkAdmin').onclick = () => { renderAdmin(); show('admin'); };
+$('btnAdminBack').onclick = () => show('sale');
+function renderAdmin(){
+  $('admList').innerHTML = S.products.map((p, i) => `
+    <div class="adm" data-i="${i}">
+      <input class="an" value="${String(p.name).replace(/"/g,'&quot;')}" placeholder="Item name">
+      <input class="ap" type="number" step="0.25" min="0" value="${p.price_usd}">
+      <button class="x" title="Remove">×</button>
+    </div>`).join('');
+}
+$('admList').onclick = e => {
+  if (!e.target.classList.contains('x')) return;
+  const i = Number(e.target.closest('.adm').dataset.i);
+  S.products.splice(i, 1); renderAdmin();
+};
+$('btnAddProd').onclick = () => {
+  S.products.push({ product_id: uuid().slice(0,8), name:'', price_usd:0, active:true });
+  renderAdmin();
+};
+$('btnSaveProd').onclick = async () => {
+  const rows = [...document.querySelectorAll('.adm')].map((d, i) => ({
+    product_id: S.products[i].product_id,
+    name: d.querySelector('.an').value.trim(),
+    price_usd: parseFloat(d.querySelector('.ap').value) || 0,
+    active: true
+  })).filter(p => p.name);
+  if (!rows.length) { $('admErr').textContent = 'Add at least one item.'; return; }
+  $('admErr').textContent = ''; $('btnSaveProd').disabled = true;
+  try {
+    const r = await api('saveProducts', { products: rows });
+    if (!r.ok) { $('admErr').textContent = r.error === 'forbidden'
+      ? 'Only Erik and Santiago can change the catalog.' : 'Could not save.'; return; }
+    S.products = r.products; renderGrid(); renderAdmin();
+    toast('Catalog saved.');
+  } catch (e) { $('admErr').textContent = 'Cannot reach the server — ' + why(null, e); }
+  finally { $('btnSaveProd').disabled = false; }
+};
+
+/* ======================== session hygiene ======================= */
+function touch(){ S.lastAct = Date.now(); }
+document.addEventListener('touchstart', touch, { passive:true });
+document.addEventListener('click', touch);
+setInterval(() => {
+  if (S.token && Date.now() - S.lastAct > IDLE_MS) signOut(true);
+}, 30000);
+
+$('lnkOut').onclick = () => signOut(false);
+async function signOut(idle){
+  if (S.pending > 0 && !confirm(S.pending + ' sale(s) have not synced yet. Sign out anyway?')) return;
+  S = Object.assign(S, { token:null, seller:null, session:null, student:null, cart:{}, pin:'' });
+  drawPin(); show('pin');
+  $('pinErr').textContent = idle ? 'Signed out after 30 minutes idle. Enter your PIN.' : '';
+}
+
+/* ============================ boot ============================== */
+updatePending();
+show('pin');
+</script>
+</body>
+</html>
