@@ -1,847 +1,530 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
-<title>Junior Sale</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&display=swap" rel="stylesheet">
-<style>
-  :root{
-    --bg:#f3f2f8; --card:#fff; --ink:#191627; --muted:#6e6880; --line:#e4e1ee;
-    --brand:#5b2bd9; --brand-deep:#3f1ba0; --brand-soft:#efe9fe;
-    --ok:#0b7a4b; --ok-soft:#e3f5ec;
-    --warn:#b06e05; --warn-soft:#fdf1dc;
-    --bad:#c22e24; --bad-soft:#fceae8;
-    --pad:16px; --r:12px; --r-sm:9px;
-    --display:"Bricolage Grotesque",-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
-    --ui:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
-    --shadow:0 1px 2px rgba(25,22,39,.05),0 4px 14px rgba(25,22,39,.05);
-  }
-  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
-  html,body{margin:0;background:var(--bg);color:var(--ink);
-    font:400 16px/1.45 var(--ui);font-variant-numeric:tabular-nums;
-    -webkit-font-smoothing:antialiased}
-  body{padding:0 var(--pad) 104px;max-width:520px;margin:0 auto}
-  h1{font-family:var(--display);font-size:28px;font-weight:800;letter-spacing:-.02em;
-    margin:26px 0 4px;line-height:1.1}
-  .sub{color:var(--muted);font-size:14px;margin:0 0 20px}
-  label{display:block;font-size:12px;font-weight:600;letter-spacing:.04em;
-    text-transform:uppercase;color:var(--muted);margin:20px 0 8px}
-  input,select,button{font:inherit;font-variant-numeric:tabular-nums}
-  input{width:100%;padding:14px 13px;border:1px solid var(--line);border-radius:var(--r-sm);
-    background:var(--card);color:var(--ink);transition:border-color .15s,box-shadow .15s}
-  input:focus{outline:0;border-color:var(--brand);box-shadow:0 0 0 3px var(--brand-soft)}
-  button:focus-visible,a:focus-visible{outline:2px solid var(--brand);outline-offset:2px}
-  .hide{display:none!important}
+/**
+ * Junior Sale Tracker — Cloudflare Worker + D1
+ *
+ * D1 is the source of truth. A cron trigger mirrors it into Google Sheets.
+ * The mirror overwrites only these four tabs: Ledger, Students, Products,
+ * Sessions. Any other tab you create is never touched, so put formulas,
+ * pivot tables and notes on their own tabs.
+ */
 
-  .chips{display:flex;flex-wrap:wrap;gap:6px;margin:0 0 20px;padding:0}
-  .chip{font-size:12.5px;font-weight:600;padding:5px 10px;border-radius:99px;
-    background:var(--card);border:1px solid var(--line);color:var(--muted)}
-  .chip.brand{background:var(--brand-soft);border-color:transparent;color:var(--brand-deep)}
+const DEBT_LIMIT = 20;
+const NEAR_LIMIT = 15;
+const TOKEN_TTL  = 6 * 60 * 60 * 1000;
+const MAX_FAILS  = 5;
+const FAIL_WIN   = 5 * 60 * 1000;
 
-  .btn{width:100%;min-height:54px;border:0;border-radius:var(--r-sm);background:var(--brand);
-    color:#fff;font-weight:700;cursor:pointer;margin-top:22px;letter-spacing:.01em;
-    transition:transform .1s,background .15s;box-shadow:var(--shadow)}
-  .btn:active{transform:scale(.985)}
-  .btn:disabled{background:#dedae8;color:#9a93aa;cursor:not-allowed;box-shadow:none}
-  .btn.ghost{background:var(--card);color:var(--ink);border:1px solid var(--line);font-weight:600}
+const TZ          = 'America/Caracas';
+const SHEET_TITLE = 'Junior Sale 2026-27';
 
-  /* keypad */
-  .dots{display:flex;gap:14px;justify-content:center;margin:34px 0 26px}
-  .dot{width:15px;height:15px;border-radius:50%;border:2px solid var(--line);
-    transition:background .15s,border-color .15s,transform .15s}
-  .dot.on{background:var(--brand);border-color:var(--brand);transform:scale(1.12)}
-  .pad{display:grid;grid-template-columns:repeat(3,1fr);gap:11px}
-  .pad button{min-height:64px;border:1px solid var(--line);border-radius:var(--r-sm);
-    background:var(--card);font-size:23px;font-weight:600;cursor:pointer;
-    box-shadow:var(--shadow);transition:transform .08s,background .12s}
-  .pad button:active{background:var(--brand-soft);transform:scale(.95)}
-
-  /* student picker */
-  .results{border-radius:var(--r-sm);margin-top:8px;overflow:hidden;box-shadow:var(--shadow);
-    border:1px solid var(--line);background:var(--card)}
-  .results button{display:block;width:100%;text-align:left;padding:14px 13px;border:0;
-    border-bottom:1px solid var(--line);background:var(--card);cursor:pointer;font-weight:600}
-  .results button:last-child{border-bottom:0}
-  .results button:active{background:var(--brand-soft)}
-  .results .sec{display:block;color:var(--muted);font-size:13px;font-weight:400;margin-top:2px}
-  .results .add{color:var(--brand-deep)}
-
-  /* selected student */
-  .who{background:var(--card);border:1px solid var(--line);border-radius:var(--r);
-    padding:15px;margin-top:18px;box-shadow:var(--shadow)}
-  .who .row{display:flex;justify-content:space-between;align-items:baseline;gap:10px}
-  .who .nm{font-family:var(--display);font-weight:700;font-size:19px;letter-spacing:-.01em}
-  .who .bal{font-size:14px;font-weight:600;color:var(--muted);white-space:nowrap}
-
-  /* SIGNATURE: one segment per dollar of the $20 limit.
-     Countable at a glance — a seller can see how much room is left. */
-  .gauge{display:flex;gap:2px;margin-top:13px;height:12px}
-  .gauge i{flex:1;background:#e9e6f2;border-radius:2px;transition:background .2s}
-  .gauge i:first-child{border-radius:4px 2px 2px 4px}
-  .gauge i:last-child{border-radius:2px 4px 4px 2px}
-  .gauge.ok   i.f{background:var(--ok)}
-  .gauge.warn i.f{background:var(--warn)}
-  .gauge.over i.f{background:var(--bad)}
-  .gnote{margin-top:8px;font-size:13px;font-weight:600;color:var(--muted)}
-  .gauge.warn ~ .gnote{color:var(--warn)}
-  .gauge.over ~ .gnote{color:var(--bad)}
-
-  .blocked{margin-top:13px;padding:12px 13px;border-radius:var(--r-sm);
-    background:var(--bad-soft);color:var(--bad);font-size:14px;font-weight:600;
-    border-left:3px solid var(--bad)}
-
-  /* products */
-  .grid{display:grid;grid-template-columns:1fr 1fr;gap:11px}
-  .grid button{min-height:74px;border:1.5px solid var(--line);border-radius:var(--r-sm);
-    background:var(--card);cursor:pointer;padding:12px;text-align:left;position:relative;
-    box-shadow:var(--shadow);transition:transform .08s,border-color .12s,background .12s}
-  .grid button:active{transform:scale(.97)}
-  .grid button.on{border-color:var(--brand);background:var(--brand-soft)}
-  .grid .pn{display:block;font-size:15.5px;font-weight:600;padding-right:26px}
-  .grid .pp{display:inline-block;color:var(--muted);font-size:12.5px;font-weight:600;
-    margin-top:6px;background:var(--bg);padding:2px 7px;border-radius:99px}
-  .grid button.on .pp{background:#fff;color:var(--brand-deep)}
-  .grid .qty{position:absolute;top:9px;right:9px;min-width:24px;height:24px;
-    background:var(--brand);color:#fff;border-radius:99px;font-size:13px;font-weight:700;
-    display:flex;align-items:center;justify-content:center;padding:0 6px}
-
-  /* payment */
-  .pay{display:grid;grid-template-columns:repeat(3,1fr);gap:9px}
-  .pay button{min-height:54px;border:1.5px solid var(--line);border-radius:var(--r-sm);
-    background:var(--card);cursor:pointer;font-size:14px;font-weight:600;
-    box-shadow:var(--shadow);transition:transform .08s,border-color .12s,background .12s}
-  .pay button:active{transform:scale(.97)}
-  .pay button.on{border-color:var(--brand);background:var(--brand-soft);color:var(--brand-deep)}
-  .conv{font-size:13px;font-weight:600;color:var(--muted);margin-top:8px}
-  .conv.bad{color:var(--bad)}
-
-  .total{display:flex;justify-content:space-between;align-items:baseline;
-    margin-top:24px;padding-top:16px;border-top:1px solid var(--line)}
-  .total .lbl{color:var(--muted);font-size:12px;font-weight:600;
-    letter-spacing:.04em;text-transform:uppercase}
-  .total .amt{font-family:var(--display);font-size:40px;font-weight:800;letter-spacing:-.03em}
-
-  /* chrome */
-  .bar{position:fixed;left:0;right:0;bottom:0;background:rgba(255,255,255,.92);
-    backdrop-filter:blur(12px);border-top:1px solid var(--line);
-    padding:11px var(--pad);padding-bottom:calc(11px + env(safe-area-inset-bottom));
-    font-size:13px;color:var(--muted)}
-  .bar .inner{width:100%;max-width:520px;margin:0 auto;display:flex;gap:10px;
-    align-items:center;justify-content:space-between}
-  .bar a{color:var(--brand-deep);cursor:pointer;font-weight:600;text-decoration:none}
-  .sync{display:inline-flex;align-items:center;gap:7px;font-weight:600}
-  .led{width:9px;height:9px;border-radius:50%;background:var(--ok);flex:none}
-  .led.pending{background:var(--warn);animation:pulse 1.4s ease-in-out infinite}
-  .led.err{background:var(--bad)}
-  @keyframes pulse{50%{opacity:.35}}
-
-  .toast{position:fixed;left:50%;transform:translateX(-50%);bottom:76px;max-width:480px;
-    width:calc(100% - 32px);background:var(--ink);color:#fff;padding:13px 15px;
-    border-radius:var(--r-sm);font-size:14px;font-weight:600;z-index:20;
-    box-shadow:0 8px 28px rgba(25,22,39,.28);animation:rise .22s ease-out}
-  @keyframes rise{from{opacity:0;transform:translate(-50%,10px)}}
-
-  .err{color:var(--bad);font-size:14px;font-weight:600;margin-top:12px;min-height:20px}
-
-  /* catalog */
-  .adm{background:var(--card);border:1px solid var(--line);border-radius:var(--r-sm);
-    padding:11px;margin-top:9px;display:grid;grid-template-columns:1fr 88px 40px;gap:9px;
-    align-items:center;box-shadow:var(--shadow)}
-  .adm input{padding:10px}
-  .adm .x{border:0;background:transparent;color:var(--muted);font-size:22px;cursor:pointer}
-
-  /* recent */
-  .rec{background:var(--card);border:1px solid var(--line);border-radius:var(--r-sm);
-    padding:12px 13px;margin-top:9px;display:flex;justify-content:space-between;
-    align-items:center;gap:11px;box-shadow:var(--shadow)}
-  .rec .l{min-width:0}
-  .rec .n{font-weight:700;font-size:15px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-  .rec .d{display:block;color:var(--muted);font-size:13px;margin-top:2px}
-  .rec .v{border:1px solid var(--line);background:var(--card);color:var(--bad);
-    border-radius:var(--r-sm);padding:9px 13px;font-size:13px;font-weight:600;
-    cursor:pointer;flex:none}
-  .rec.gone{opacity:.4}
-
-  @media (prefers-reduced-motion:reduce){
-    *{animation:none!important;transition:none!important}
-  }
-</style>
-</head>
-<body>
-
-<!-- 1. PIN -->
-<section id="v-pin">
-  <h1>Junior sale</h1>
-  <p class="sub">Enter your seller PIN.</p>
-  <div class="dots" id="dots"></div>
-  <div class="pad" id="pad"></div>
-  <div class="err" id="pinErr"></div>
-</section>
-
-<!-- 2. Session -->
-<section id="v-session" class="hide">
-  <h1>Start the day</h1>
-  <p class="sub" id="sesWho"></p>
-  <label for="fDate">Date</label>
-  <input type="date" id="fDate">
-  <label for="fRate">Bolívar rate (Bs per $1)</label>
-  <input type="number" id="fRate" inputmode="decimal" step="0.01" min="0" placeholder="e.g. 235.50">
-  <p class="sub" id="sesNote" style="margin-top:10px"></p>
-  <button class="btn" id="btnSession">Open session</button>
-  <div class="err" id="sesErr"></div>
-</section>
-
-<!-- 3. Sale -->
-<section id="v-sale" class="hide">
-  <h1>New sale</h1>
-  <div class="chips" id="saleMeta"></div>
-
-  <label for="fStudent">Who is buying</label>
-  <input id="fStudent" autocomplete="off" autocapitalize="words" placeholder="Type a first and last name">
-  <div class="results hide" id="results"></div>
-
-  <div id="picked" class="hide">
-    <div class="who">
-      <div class="row"><span class="nm" id="whoName"></span><span class="bal" id="whoBal"></span></div>
-      <div class="gauge" id="gauge"></div>
-      <div class="gnote" id="gaugeNote"></div>
-      <div class="blocked hide" id="blocked"></div>
-      <button class="btn ghost" id="btnPayMode" style="margin-top:12px;min-height:44px">Record a payment</button>
-    </div>
-
-    <div id="cartArea">
-      <label>Items</label>
-      <div class="grid" id="grid"></div>
-
-      <label>Payment</label>
-      <div class="pay">
-        <button data-m="CASH_USD">Cash $</button>
-        <button data-m="BS">Bolívares</button>
-        <button data-m="DEBT">Debt</button>
-      </div>
-      <div id="bsWrap" class="hide">
-        <label for="fBs">Bolívares received</label>
-        <input type="number" id="fBs" inputmode="decimal" step="0.01" min="0">
-        <div class="conv" id="bsConv"></div>
-      </div>
-
-      <div class="total"><span class="lbl">Total</span><span class="amt" id="total">$0.00</span></div>
-      <button class="btn" id="btnConfirm" disabled>Confirm sale</button>
-      <button class="btn ghost" id="btnClear" style="margin-top:10px">Clear</button>
-    </div>
-
-    <div id="payArea" class="hide">
-      <label for="fPayAmt">Payment amount ($)</label>
-      <input type="number" id="fPayAmt" inputmode="decimal" step="0.01" min="0">
-      <label>Paid with</label>
-      <div class="pay" style="grid-template-columns:1fr 1fr">
-        <button data-p="CASH_USD">Cash $</button>
-        <button data-p="BS">Bolívares</button>
-      </div>
-      <div id="payBsWrap" class="hide">
-        <label for="fPayBs">Bolívares received</label>
-        <input type="number" id="fPayBs" inputmode="decimal" step="0.01" min="0">
-        <div class="conv" id="payConv"></div>
-      </div>
-      <button class="btn" id="btnPay" disabled>Record payment</button>
-      <button class="btn ghost" id="btnPayCancel" style="margin-top:10px">Cancel</button>
-    </div>
-  </div>
-  <div class="err" id="saleErr"></div>
-</section>
-
-<!-- 4. Catalog (admins) -->
-<section id="v-admin" class="hide">
-  <h1>Catalog</h1>
-  <p class="sub">Changes apply to every seller on their next login.</p>
-  <div id="admList"></div>
-  <button class="btn ghost" id="btnAddProd" style="min-height:44px">Add item</button>
-  <button class="btn" id="btnSaveProd">Save catalog</button>
-  <button class="btn ghost" id="btnAdminBack" style="margin-top:10px">Back to sales</button>
-  <div class="err" id="admErr"></div>
-</section>
-
-<!-- 5. Recent sales / void -->
-<section id="v-recent" class="hide">
-  <h1>Recent sales</h1>
-  <p class="sub">Voiding appends a reversing entry. Nothing is ever deleted.</p>
-  <div id="recList"></div>
-  <button class="btn ghost" id="btnRecBack">Back to sales</button>
-  <div class="err" id="recErr"></div>
-</section>
-
-<div class="bar hide" id="bar">
-  <div class="inner">
-    <span class="sync"><span class="led" id="led"></span><span id="syncTxt">Synced</span></span>
-    <span><a id="lnkRecent">Recent</a> &nbsp; <a id="lnkAdmin" class="hide">Catalog</a> &nbsp; <a id="lnkOut">Sign out</a></span>
-  </div>
-</div>
-
-<script>
-/* ============================ config ============================ */
-const API_URL = 'https://junior-sale.dudelolebmgo.workers.dev';
-const IDLE_MS = 30 * 60 * 1000;
-const FLUSH_MS = 2000;
-
-/* ============================ state ============================= */
-let S = {
-  token:null, seller:null, session:null,
-  products:[], students:[], balances:{},
-  limit:20, near:15,
-  student:null, cart:{}, method:null, payMethod:null,
-  pin:'', pending:0, lastAct:Date.now(), flushing:false
+/* Money columns get currency formatting; plain numbers stay plain. */
+const TABS = {
+  Sales:    { money: [6, 10], plain: [5, 8, 9] },
+  Debts:    { money: [2],     plain: [] },
+  Students: { money: [2],     plain: [] },
+  Items:    { money: [1],     plain: [] },
+  Days:     { money: [],      plain: [1] }
 };
-const $ = id => document.getElementById(id);
-const money = n => '$' + (Math.round(n*100)/100).toFixed(2);
-const uuid = () => (crypto.randomUUID ? crypto.randomUUID()
-  : 'x'+Date.now()+Math.random().toString(16).slice(2));
-const clientId = (() => {
-  let c = localStorage.getItem('jsx_client');
-  if (!c) { c = uuid(); localStorage.setItem('jsx_client', c); }
-  return c;
-})();
+export default {
+  async fetch(req, env, ctx) {
+    const origin = req.headers.get('Origin') || '*';
+    if (req.method === 'OPTIONS') return new Response(null, { status: 204, headers: cors(origin) });
 
-/* ========================= outbox (IndexedDB) ==================== */
-/* Durable across tab crashes and reboots — a queued sale is never lost. */
-let DB;
-function db(){
-  return DB ? Promise.resolve(DB) : new Promise((res, rej) => {
-    const r = indexedDB.open('junior-sale', 1);
-    r.onupgradeneeded = () => r.result.createObjectStore('outbox', { keyPath:'id' });
-    r.onsuccess = () => { DB = r.result; res(DB); };
-    r.onerror = () => rej(r.error);
-  });
-}
-async function tx(mode, fn){
-  const d = await db();
-  return new Promise((res, rej) => {
-    const t = d.transaction('outbox', mode);
-    const out = fn(t.objectStore('outbox'));
-    t.oncomplete = () => res(out && out.result !== undefined ? out.result : out);
-    t.onerror = () => rej(t.error);
-  });
-}
-let seqN = 0;
-const nextSeq = () => Date.now() * 1000 + (seqN++ % 1000);
-const outboxPut  = rec  => tx('readwrite', st => st.put(Object.assign({ seq: nextSeq() }, rec)));
-const outboxDrop = ids  => tx('readwrite', st => ids.forEach(i => st.delete(i)));
-/* Keys are UUIDs, so getAll() comes back in key order, not insertion order.
-   Sorting by seq keeps a new student ahead of the sales that reference them. */
-async function outboxAll(){
-  const all = await tx('readonly', st => st.getAll());
-  return all.sort((a, b) => (a.seq || 0) - (b.seq || 0));
-}
+    const action = new URL(req.url).pathname.replace(/^\/+|\/+$/g, '');
+    if (!action) return json({ ok: true, service: 'junior-sale-tracker' }, origin);
 
-/* ============================ api =============================== */
-/* The Worker sends proper CORS headers, so this is a plain JSON POST and
-   failures come back with a readable reason instead of an opaque error. */
-async function api(action, payload = {}){
-  const r = await fetch(API_URL + '/' + action, {
-    method:'POST',
-    headers:{ 'Content-Type':'application/json' },
-    body: JSON.stringify(Object.assign({ token:S.token, client_id:clientId }, payload))
-  });
-  let j = null;
-  try { j = await r.json(); } catch (e) { throw new Error('http_' + r.status + ' (unreadable response)'); }
-  if (!r.ok && !j) throw new Error('http_' + r.status);
-  return j;
-}
-function why(r, err){
-  if (err) return err.message || String(err);
-  if (!r) return 'no response';
-  return r.detail ? r.error + ': ' + r.detail : (r.error || 'unknown');
-}
-
-/* ============================ views ============================= */
-function show(v){
-  ['pin','session','sale','admin','recent'].forEach(n => $('v-'+n).classList.toggle('hide', n !== v));
-  $('bar').classList.toggle('hide', v === 'pin');
-  window.scrollTo(0,0);
-}
-function toast(msg, ms = 3200){
-  let t = document.querySelector('.toast');
-  if (!t) { t = document.createElement('div'); t.className='toast'; document.body.appendChild(t); }
-  t.textContent = msg;
-  clearTimeout(t._h); t._h = setTimeout(() => t.remove(), ms);
-}
-
-/* ============================ PIN =============================== */
-function drawPin(){
-  $('dots').innerHTML = [0,1,2,3]
-    .map(i => `<span class="dot${i < S.pin.length ? ' on' : ''}"></span>`).join('');
-}
-$('pad').innerHTML = ['1','2','3','4','5','6','7','8','9','','0','⌫']
-  .map(k => k === '' ? '<span></span>' : `<button data-k="${k}">${k}</button>`).join('');
-$('pad').onclick = e => {
-  const k = e.target.dataset.k; if (!k) return;
-  $('pinErr').textContent = '';
-  if (k === '⌫') S.pin = S.pin.slice(0,-1);
-  else if (S.pin.length < 4) S.pin += k;
-  drawPin();
-  if (S.pin.length === 4) login();
-};
-drawPin();
-
-async function login(){
-  const pin = S.pin; S.pin = ''; drawPin();
-  $('pinErr').textContent = 'Checking…';
-  try {
-    const r = await api('auth', { pin });
-    if (!r.ok) {
-      $('pinErr').textContent = r.error === 'locked'
-        ? 'Too many wrong PINs. Wait five minutes.'
-        : 'That PIN did not match. Try again.';
-      return;
+    let body = {};
+    if (req.method === 'POST') {
+      try { body = await req.json(); }
+      catch { return json({ ok: false, error: 'bad_json' }, origin, 400); }
     }
-    S.token = r.token; S.seller = r.seller;
-    S.products = r.products; S.students = r.students; S.balances = r.balances;
-    S.limit = r.debt_limit; S.near = r.near_limit; S.session = r.session;
-    $('pinErr').textContent = '';
-    $('lnkAdmin').classList.toggle('hide', !S.seller.is_admin);
-    $('sesWho').textContent = 'Signed in as ' + S.seller.first_name + ' ' + S.seller.last_name + '.';
-    $('fDate').value = r.session ? r.session.date : new Date().toISOString().slice(0,10);
-    if (r.session) {
-      $('fRate').value = r.session.bs_rate;
-      $('sesNote').textContent = 'A session is already open for this date at '
-        + r.session.bs_rate + ' Bs. Change the rate only if it moved.';
-    } else { $('sesNote').textContent = ''; }
-    show('session');
-    touch();
-  } catch (err) {
-    $('pinErr').textContent = 'Cannot reach the server — ' + why(null, err);
-  }
-}
 
-/* ============================ session =========================== */
-$('btnSession').onclick = async () => {
-  const date = $('fDate').value, rate = parseFloat($('fRate').value);
-  if (!date) { $('sesErr').textContent = 'Pick a date.'; return; }
-  if (!(rate > 0)) { $('sesErr').textContent = 'Enter the bolívar rate.'; return; }
-  $('sesErr').textContent = ''; $('btnSession').disabled = true;
-  try {
-    const r = await api('openSession', { date, bs_rate: rate });
-    if (!r.ok) { $('sesErr').textContent = 'Could not open the session — ' + why(r); return; }
-    S.session = r.session;
-    $('saleMeta').innerHTML = `<span class="chip">${S.seller.first_name}</span>`
-      + `<span class="chip">${r.session.date}</span>`
-      + `<span class="chip brand">${r.session.bs_rate} Bs/$</span>`;
-    renderGrid(); show('sale'); $('fStudent').focus();
-  } catch (err) {
-    $('sesErr').textContent = 'Cannot reach the server — ' + why(null, err);
-  } finally { $('btnSession').disabled = false; }
-};
-
-/* ======================= student type-ahead ===================== */
-function allStudents(){ return S.students; }
-function nameOf(s){ return (s.first_name + ' ' + s.last_name).trim(); }
-
-$('fStudent').oninput = () => {
-  touch();
-  const q = $('fStudent').value.trim().toLowerCase();
-  const box = $('results');
-  if (q.length < 2) { box.classList.add('hide'); return; }
-  const hits = allStudents()
-    .filter(s => nameOf(s).toLowerCase().includes(q))
-    .slice(0, 6);
-  const rows = hits.map(s => {
-    const bal = S.balances[s.student_id] || 0;
-    const tag = s.section ? ` · ${s.section}` : '';
-    const debt = bal > 0 ? ` · owes ${money(bal)}` : '';
-    return `<button data-id="${s.student_id}">${nameOf(s)}<span class="sec">${tag}${debt}</span></button>`;
-  });
-  rows.push(`<button class="add" data-new="1">Add “${$('fStudent').value.trim()}” as a new student</button>`);
-  box.innerHTML = rows.join(''); box.classList.remove('hide');
-};
-
-$('results').onclick = e => {
-  const b = e.target.closest('button'); if (!b) return;
-  if (b.dataset.new) return addStudent();
-  pick(allStudents().find(s => String(s.student_id) === b.dataset.id));
-};
-
-function addStudent(){
-  const raw = $('fStudent').value.trim().replace(/\s+/g,' ');
-  const parts = raw.split(' ');
-  if (parts.length < 2) { $('saleErr').textContent = 'Type a first name and a last name.'; return; }
-  const section = prompt('Section or grade for ' + raw + ' (optional, helps tell same names apart):') || '';
-  const s = {
-    student_id: uuid(), first_name: parts[0],
-    last_name: parts.slice(1).join(' '), section: section.trim(), _new: true
-  };
-  S.students.push(s);
-  outboxPut({ id:s.student_id, kind:'student', payload:s });
-  updatePending();
-  pick(s);
-}
-
-function pick(s){
-  if (!s) return;
-  S.student = s; S.cart = {}; S.method = null;
-  $('fStudent').value = nameOf(s);
-  $('results').classList.add('hide');
-  $('picked').classList.remove('hide');
-  $('payArea').classList.add('hide'); $('cartArea').classList.remove('hide');
-  $('saleErr').textContent = '';
-  renderStudent(); renderGrid(); renderPay(); renderTotal();
-}
-
-function renderStudent(){
-  const bal = S.balances[S.student.student_id] || 0;
-  const over = bal >= S.limit;
-  $('whoName').textContent = nameOf(S.student) + (S.student.section ? ' · ' + S.student.section : '');
-  $('whoBal').textContent = bal > 0 ? `${money(bal)} owed` : 'No debt';
-  /* One segment per dollar of the limit, so remaining credit is countable. */
-  const filled = Math.min(Math.ceil(bal), S.limit);
-  const g = $('gauge');
-  g.className = 'gauge ' + (over ? 'over' : bal >= S.near ? 'warn' : 'ok');
-  g.innerHTML = Array.from({ length: S.limit },
-    (_, i) => `<i class="${i < filled ? 'f' : ''}"></i>`).join('');
-  $('gaugeNote').textContent = over
-    ? 'No credit left'
-    : `${money(S.limit - bal)} of credit left`;
-  $('blocked').classList.toggle('hide', !over);
-  $('blocked').textContent = over
-    ? `Blocked. ${S.student.first_name} is at the ${money(S.limit)} limit and cannot buy until the debt is paid.`
-    : '';
-  $('cartArea').classList.toggle('hide', over);
-}
-
-/* ============================ cart ============================== */
-function renderGrid(){
-  $('grid').innerHTML = S.products.map(p => {
-    const q = S.cart[p.product_id] || 0;
-    return `<button data-p="${p.product_id}" class="${q ? 'on' : ''}">
-      <span class="pn">${p.name}</span><span class="pp">${money(p.price_usd)}</span>
-      ${q ? `<span class="qty">${q}</span>` : ''}</button>`;
-  }).join('');
-}
-$('grid').onclick = e => {
-  const b = e.target.closest('button'); if (!b) return;
-  touch();
-  const id = b.dataset.p;
-  S.cart[id] = (S.cart[id] || 0) + 1;
-  renderGrid(); renderTotal();
-};
-$('grid').oncontextmenu = e => {
-  const b = e.target.closest('button'); if (!b) return;
-  e.preventDefault();
-  const id = b.dataset.p;
-  if (S.cart[id]) { S.cart[id]--; if (!S.cart[id]) delete S.cart[id]; }
-  renderGrid(); renderTotal();
-};
-$('btnClear').onclick = () => { S.cart = {}; S.method = null; renderGrid(); renderPay(); renderTotal(); };
-
-function cartTotal(){
-  return Object.keys(S.cart).reduce((sum, id) => {
-    const p = S.products.find(x => String(x.product_id) === id);
-    return sum + (p ? Number(p.price_usd) * S.cart[id] : 0);
-  }, 0);
-}
-
-function renderPay(){
-  document.querySelectorAll('.pay [data-m]').forEach(b =>
-    b.classList.toggle('on', b.dataset.m === S.method));
-  $('bsWrap').classList.toggle('hide', S.method !== 'BS');
-}
-document.querySelector('.pay').onclick = e => {
-  const b = e.target.closest('[data-m]'); if (!b) return;
-  touch(); S.method = b.dataset.m; renderPay(); renderTotal();
-};
-$('fBs').oninput = renderTotal;
-
-function renderTotal(){
-  const t = cartTotal();
-  $('total').textContent = money(t);
-  let ok = t > 0 && S.method;
-  if (S.method === 'BS') {
-    const bs = parseFloat($('fBs').value);
-    if (bs > 0) {
-      const usd = bs / S.session.bs_rate;
-      const off = Math.abs(usd - t) / t;
-      $('bsConv').textContent = `${bs.toLocaleString()} Bs ÷ ${S.session.bs_rate} = ${money(usd)}`
-        + (off > 0.1 ? ' — that is far from the total. Check the amount.' : '');
-      $('bsConv').className = 'conv' + (off > 0.1 ? ' bad' : '');
-    } else { $('bsConv').textContent = ''; ok = false; }
-  }
-  $('btnConfirm').disabled = !ok;
-}
-
-/* =========================== confirm ============================ */
-$('btnConfirm').onclick = async () => {
-  touch();
-  const total = cartTotal();
-  const bal = S.balances[S.student.student_id] || 0;
-
-  if (S.method === 'DEBT' && bal + total > S.near) {
-    $('btnConfirm').disabled = true; $('btnConfirm').textContent = 'Checking balance…';
     try {
-      const r = await api('balances');
-      if (r.ok) { S.balances = r.balances; S.students = r.students.concat(S.students.filter(s => s._new)); }
-    } catch (e) { /* offline: fall through on the cached balance */ }
-    $('btnConfirm').textContent = 'Confirm sale';
-    renderStudent();
-    const fresh = S.balances[S.student.student_id] || 0;
-    if (fresh >= S.limit) { toast('Blocked — debt limit reached.'); return; }
-    if (fresh + total > S.limit) {
-      $('btnConfirm').disabled = false;
-      $('saleErr').textContent = `This would put ${S.student.first_name} over ${money(S.limit)}. Take cash or bolívares instead.`;
-      return;
+      const handler = ROUTES[action];
+      if (!handler) return json({ ok: false, error: 'unknown_action' }, origin, 404);
+      return json(await handler(body, env, ctx), origin);
+    } catch (err) {
+      return json({ ok: false, error: 'server_error', detail: String(err && err.message || err) }, origin, 500);
     }
-    $('btnConfirm').disabled = false;
+  },
+
+  async scheduled(event, env, ctx) {
+    ctx.waitUntil(mirror(env));
   }
+};
 
-  const lines = Object.keys(S.cart).map(id => {
-    const p = S.products.find(x => String(x.product_id) === id);
-    return { id, name:p.name, qty:S.cart[id], amount: Number(p.price_usd) * S.cart[id] };
-  });
-  const bsTotal = S.method === 'BS' ? parseFloat($('fBs').value) : null;
-  let bsLeft = bsTotal;
+/* ------------------------------------------------------------ plumbing */
 
-  const entries = lines.map((l, i) => {
-    let bs = '';
-    if (S.method === 'BS') {
-      bs = (i === lines.length - 1) ? Math.round(bsLeft * 100) / 100
-        : Math.round((bsTotal * (l.amount / total)) * 100) / 100;
-      bsLeft -= bs;
+const cors = origin => ({
+  'Access-Control-Allow-Origin': origin,
+  'Access-Control-Allow-Methods': 'POST, GET, OPTIONS',
+  'Access-Control-Allow-Headers': 'Content-Type',
+  'Access-Control-Max-Age': '86400'
+});
+
+const json = (obj, origin, status = 200) => new Response(JSON.stringify(obj), {
+  status, headers: { 'Content-Type': 'application/json', ...cors(origin) }
+});
+
+async function sha256(str) {
+  const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(str));
+  return [...new Uint8Array(buf)].map(b => b.toString(16).padStart(2, '0')).join('');
+}
+
+const uuid = () => crypto.randomUUID();
+const r2 = n => Math.round((Number(n) + Number.EPSILON) * 100) / 100;
+
+async function auth(body, env) {
+  if (!body.token) return null;
+  const row = await env.DB.prepare(
+    'SELECT seller_id FROM tokens WHERE token = ? AND expires > ?'
+  ).bind(body.token, Date.now()).first();
+  return row ? row.seller_id : null;
+}
+
+async function balanceMap(env, ids) {
+  let q = 'SELECT student_id, ROUND(SUM(debt_delta), 2) AS bal FROM ledger';
+  let stmt;
+  if (ids && ids.length) {
+    q += ` WHERE student_id IN (${ids.map(() => '?').join(',')})`;
+    stmt = env.DB.prepare(q + ' GROUP BY student_id').bind(...ids);
+  } else {
+    stmt = env.DB.prepare(q + ' GROUP BY student_id');
+  }
+  const { results } = await stmt.all();
+  const out = {};
+  (results || []).forEach(r => { out[r.student_id] = r.bal || 0; });
+  return out;
+}
+
+/* ------------------------------------------------------------- actions */
+
+const ROUTES = {
+
+  async auth(body, env) {
+    const client = String(body.client_id || 'anon').slice(0, 64);
+    const failKey = 'fail:' + client;
+    const fail = await env.DB.prepare('SELECT seller_id, expires FROM tokens WHERE token = ?')
+      .bind(failKey).first();
+    let fails = 0;
+    if (fail && fail.expires > Date.now()) fails = Number(fail.seller_id) || 0;
+    if (fails >= MAX_FAILS) return { ok: false, error: 'locked' };
+
+    const hash = await sha256(String(body.pin || ''));
+    const seller = await env.DB.prepare(
+      'SELECT seller_id, first_name, last_name, is_admin FROM sellers WHERE pin_hash = ? AND active = 1'
+    ).bind(hash).first();
+
+    if (!seller) {
+      await env.DB.prepare('INSERT OR REPLACE INTO tokens (token, seller_id, expires) VALUES (?,?,?)')
+        .bind(failKey, String(fails + 1), Date.now() + FAIL_WIN).run();
+      return { ok: false, error: 'bad_pin', attempts_left: MAX_FAILS - fails - 1 };
     }
+
+    const token = uuid();
+    const today = new Date().toISOString().slice(0, 10);
+
+    const [_, products, students, session] = await env.DB.batch([
+      env.DB.prepare('INSERT INTO tokens (token, seller_id, expires) VALUES (?,?,?)')
+        .bind(token, seller.seller_id, Date.now() + TOKEN_TTL),
+      env.DB.prepare('SELECT product_id, name, price_usd FROM products WHERE active = 1 ORDER BY sort, name'),
+      env.DB.prepare('SELECT student_id, first_name, last_name, section FROM students'),
+      env.DB.prepare('SELECT session_id, date, bs_rate FROM sessions WHERE date = ?').bind(today)
+    ]);
+
+    // Opportunistic cleanup; cheap and keeps the table from growing forever.
+    await env.DB.prepare('DELETE FROM tokens WHERE expires < ?').bind(Date.now()).run();
+
     return {
-      entry_id: uuid(), session_id: S.session.session_id,
-      ts: new Date().toISOString(),
-      student_id: S.student.student_id, type:'SALE',
-      product_id: l.id, qty: l.qty, amount_usd: l.amount,
-      payment_method: S.method,
-      bs_amount: bs, bs_rate_used: S.method === 'BS' ? S.session.bs_rate : '',
-      debt_delta: S.method === 'DEBT' ? l.amount : 0, note:''
+      ok: true, token,
+      debt_limit: DEBT_LIMIT, near_limit: NEAR_LIMIT,
+      seller: {
+        seller_id: seller.seller_id,
+        first_name: seller.first_name,
+        last_name: seller.last_name,
+        is_admin: seller.is_admin === 1
+      },
+      products: products.results || [],
+      students: students.results || [],
+      balances: await balanceMap(env),
+      session: (session.results || [])[0] || null
     };
-  });
+  },
 
-  for (const en of entries) await outboxPut({ id:en.entry_id, kind:'entry', payload:en });
-  if (S.method === 'DEBT') {
-    S.balances[S.student.student_id] = (S.balances[S.student.student_id] || 0) + total;
-  }
-  updatePending(); flush();
+  async openSession(body, env) {
+    const sellerId = await auth(body, env);
+    if (!sellerId) return { ok: false, error: 'unauthorized' };
 
-  toast(`${money(total)} recorded for ${S.student.first_name}.`);
-  reset();
-};
+    const date = String(body.date || new Date().toISOString().slice(0, 10));
+    const rate = Number(body.bs_rate);
+    if (!(rate > 0)) return { ok: false, error: 'bad_rate' };
 
-function reset(){
-  S.student = null; S.cart = {}; S.method = null;
-  $('fStudent').value = ''; $('fBs').value = ''; $('bsConv').textContent = '';
-  $('picked').classList.add('hide'); $('results').classList.add('hide');
-  $('saleErr').textContent = '';
-  $('fStudent').focus();
-}
+    // UNIQUE(date) makes this safe when two sellers open the day at once.
+    await env.DB.prepare(
+      'INSERT OR IGNORE INTO sessions (session_id, date, bs_rate, opened_by, opened_at) VALUES (?,?,?,?,?)'
+    ).bind(uuid(), date, rate, sellerId, new Date().toISOString()).run();
 
-/* =========================== payments =========================== */
-$('btnPayMode').onclick = () => {
-  S.payMethod = null; $('fPayAmt').value = ''; $('fPayBs').value = '';
-  $('payConv').textContent = '';
-  $('cartArea').classList.add('hide'); $('payArea').classList.remove('hide');
-  $('fPayAmt').value = (S.balances[S.student.student_id] || 0) || '';
-  renderPayForm();
-};
-$('btnPayCancel').onclick = () => {
-  $('payArea').classList.add('hide');
-  $('cartArea').classList.toggle('hide', (S.balances[S.student.student_id] || 0) >= S.limit);
-};
-document.querySelectorAll('#payArea [data-p]').forEach(b => b.onclick = () => {
-  S.payMethod = b.dataset.p; renderPayForm();
-});
-$('fPayAmt').oninput = renderPayForm;
-$('fPayBs').oninput = renderPayForm;
+    const existing = await env.DB.prepare(
+      'SELECT session_id, date, bs_rate FROM sessions WHERE date = ?'
+    ).bind(date).first();
 
-function renderPayForm(){
-  touch();
-  document.querySelectorAll('#payArea [data-p]').forEach(b =>
-    b.classList.toggle('on', b.dataset.p === S.payMethod));
-  $('payBsWrap').classList.toggle('hide', S.payMethod !== 'BS');
-  const amt = parseFloat($('fPayAmt').value);
-  let ok = amt > 0 && S.payMethod;
-  if (S.payMethod === 'BS') {
-    const bs = parseFloat($('fPayBs').value);
-    if (bs > 0) $('payConv').textContent =
-      `${bs.toLocaleString()} Bs ÷ ${S.session.bs_rate} = ${money(bs / S.session.bs_rate)}`;
-    else { $('payConv').textContent = ''; ok = false; }
-  }
-  $('btnPay').disabled = !ok;
-}
+    if (existing && Number(existing.bs_rate) !== rate) {
+      await env.DB.prepare('UPDATE sessions SET bs_rate = ? WHERE date = ?').bind(rate, date).run();
+      existing.bs_rate = rate;
+    }
+    return { ok: true, session: existing };
+  },
 
-$('btnPay').onclick = async () => {
-  const amt = parseFloat($('fPayAmt').value);
-  const bs = S.payMethod === 'BS' ? parseFloat($('fPayBs').value) : '';
-  const en = {
-    entry_id: uuid(), session_id: S.session.session_id,
-    ts: new Date().toISOString(),
-    student_id: S.student.student_id, type:'PAYMENT',
-    product_id:'', qty:'', amount_usd: amt, payment_method: S.payMethod,
-    bs_amount: bs, bs_rate_used: S.payMethod === 'BS' ? S.session.bs_rate : '',
-    debt_delta: -amt, note:''
-  };
-  await outboxPut({ id:en.entry_id, kind:'entry', payload:en });
-  S.balances[S.student.student_id] = (S.balances[S.student.student_id] || 0) - amt;
-  updatePending(); flush();
-  toast(`${money(amt)} payment recorded for ${S.student.first_name}.`);
-  reset();
-};
+  async commit(body, env) {
+    const sellerId = await auth(body, env);
+    if (!sellerId) return { ok: false, error: 'unauthorized' };
 
-/* ============================ sync ============================== */
-async function flush(){
-  if (S.flushing || !S.token || !navigator.onLine) return;
-  const all = await outboxAll();
-  if (!all.length) return;
-  S.flushing = true;
-  try {
-    const batch = all.slice(0, 20);
-    const r = await api('commit', {
-      session_id: S.session ? S.session.session_id : '',
-      new_students: batch.filter(x => x.kind === 'student').map(x => x.payload),
-      entries:      batch.filter(x => x.kind === 'entry').map(x => x.payload)
-    });
-    if (!r.ok) { setLed('err', r.error === 'busy' ? 'Retrying…' : 'Sync problem'); return; }
+    const entries = body.entries || [];
+    const newStudents = body.new_students || [];
+    if (!entries.length && !newStudents.length) return { ok: true, accepted: [], rejected: [] };
 
-    const bad = r.rejected || [];
-    const permanent = ['over_limit','would_exceed_limit','missing_id'];
-    const dropIds = batch.filter(x => x.kind === 'student').map(x => x.id)
-      .concat(r.accepted || [])
-      .concat(bad.filter(b => permanent.includes(b.reason)).map(b => b.entry_id));
+    const stmts = [];
 
-    /* A transient rejection (the student row has not landed yet) is requeued,
-       not discarded. Give up after three tries so it cannot loop forever. */
-    for (const b of bad.filter(x => !permanent.includes(x.reason))) {
-      const rec = batch.find(x => x.id === b.entry_id);
-      if (!rec) continue;
-      if ((rec.tries || 0) >= 2) { dropIds.push(rec.id); toast('An entry could not be saved. Check the sheet.', 6000); }
-      else await outboxPut(Object.assign({}, rec, { tries: (rec.tries || 0) + 1 }));
+    for (const s of newStudents) {
+      if (!s.student_id) continue;
+      stmts.push(env.DB.prepare(
+        'INSERT OR IGNORE INTO students (student_id, first_name, last_name, section, created_at, created_by) VALUES (?,?,?,?,?,?)'
+      ).bind(String(s.student_id), String(s.first_name || '').trim(),
+             String(s.last_name || '').trim(), String(s.section || '').trim(),
+             new Date().toISOString(), sellerId));
     }
 
-    await outboxDrop(dropIds);
-    if (r.balances) S.balances = r.balances;
-    const overs = bad.filter(b => permanent.includes(b.reason));
-    if (overs.length) toast(`${overs.length} sale(s) rejected — debt limit reached. Collect payment.`, 6000);
-    if (S.student) renderStudent();
-    updatePending();
-  } catch (e) {
-    setLed('err', 'Offline — queued');
-  } finally { S.flushing = false; }
+    const ordered = [...entries].sort((a, b) =>
+      (a.type === 'PAYMENT' ? 0 : 1) - (b.type === 'PAYMENT' ? 0 : 1));
+
+    for (const e of ordered) {
+      if (!e.entry_id || !e.student_id) continue;
+      const vals = [
+        String(e.entry_id), String(e.session_id || ''), e.ts || new Date().toISOString(),
+        String(e.student_id), sellerId, String(e.type || 'SALE'),
+        String(e.product_id || ''), Number(e.qty || 0), r2(e.amount_usd || 0),
+        String(e.payment_method || ''),
+        e.bs_amount === '' || e.bs_amount == null ? null : Number(e.bs_amount),
+        e.bs_rate_used === '' || e.bs_rate_used == null ? null : Number(e.bs_rate_used),
+        r2(e.debt_delta || 0), String(e.note || ''), String(e.voids || '')
+      ];
+
+      if (e.type === 'SALE') {
+        /* One atomic statement: dedupe by primary key AND enforce the debt
+           limit against the live balance. No read-then-write race, no lock. */
+        stmts.push(env.DB.prepare(`
+          INSERT INTO ledger (entry_id,session_id,ts,student_id,seller_id,type,product_id,qty,
+                              amount_usd,payment_method,bs_amount,bs_rate_used,debt_delta,note,voids)
+          SELECT ?,?,?,?,?,?,?,?,?,?,?,?,?,?,?
+          WHERE NOT EXISTS (SELECT 1 FROM ledger WHERE entry_id = ?)
+            AND (SELECT COALESCE(SUM(debt_delta),0) FROM ledger WHERE student_id = ?) < ?
+            AND (SELECT COALESCE(SUM(debt_delta),0) FROM ledger WHERE student_id = ?) + ? <= ?
+        `).bind(...vals, String(e.entry_id), String(e.student_id), DEBT_LIMIT,
+                String(e.student_id), r2(e.debt_delta || 0), DEBT_LIMIT));
+      } else {
+        stmts.push(env.DB.prepare(`
+          INSERT OR IGNORE INTO ledger (entry_id,session_id,ts,student_id,seller_id,type,product_id,qty,
+                              amount_usd,payment_method,bs_amount,bs_rate_used,debt_delta,note,voids)
+          VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+        `).bind(...vals));
+      }
+    }
+
+    if (stmts.length) await env.DB.batch(stmts);
+
+    // Which of the submitted entries actually exist now?
+    const ids = entries.map(e => String(e.entry_id)).filter(Boolean);
+    let stored = new Set();
+    if (ids.length) {
+      const { results } = await env.DB.prepare(
+        `SELECT entry_id FROM ledger WHERE entry_id IN (${ids.map(() => '?').join(',')})`
+      ).bind(...ids).all();
+      stored = new Set((results || []).map(r => r.entry_id));
+    }
+
+    const studentIds = [...new Set(entries.map(e => String(e.student_id)))];
+    const balances = await balanceMap(env, studentIds);
+
+    const accepted = [], rejected = [];
+    for (const e of entries) {
+      const id = String(e.entry_id);
+      if (stored.has(id)) { accepted.push(id); continue; }
+      const bal = balances[String(e.student_id)] || 0;
+      rejected.push({
+        entry_id: id,
+        reason: bal >= DEBT_LIMIT ? 'over_limit' : 'would_exceed_limit',
+        balance: bal
+      });
+    }
+
+    return { ok: true, accepted, rejected, balances: await balanceMap(env) };
+  },
+
+  async balances(body, env) {
+    if (!await auth(body, env)) return { ok: false, error: 'unauthorized' };
+    const { results } = await env.DB.prepare(
+      'SELECT student_id, first_name, last_name, section FROM students'
+    ).all();
+    return { ok: true, balances: await balanceMap(env), students: results || [] };
+  },
+
+  async recent(body, env) {
+    const sellerId = await auth(body, env);
+    if (!sellerId) return { ok: false, error: 'unauthorized' };
+    const { results } = await env.DB.prepare(`
+      SELECT l.entry_id, l.ts, l.type, l.amount_usd, l.payment_method, l.debt_delta,
+             s.first_name, s.last_name, p.name AS product
+      FROM ledger l
+      LEFT JOIN students s ON s.student_id = l.student_id
+      LEFT JOIN products p ON p.product_id = l.product_id
+      WHERE l.session_id = ? AND l.voids = ''
+        AND l.entry_id NOT IN (SELECT voids FROM ledger WHERE voids != '')
+      ORDER BY l.ts DESC LIMIT 15
+    `).bind(String(body.session_id || '')).all();
+    return { ok: true, entries: results || [] };
+  },
+
+  async voidEntry(body, env) {
+    const sellerId = await auth(body, env);
+    if (!sellerId) return { ok: false, error: 'unauthorized' };
+
+    const orig = await env.DB.prepare('SELECT * FROM ledger WHERE entry_id = ?')
+      .bind(String(body.entry_id || '')).first();
+    if (!orig) return { ok: false, error: 'not_found' };
+
+    const already = await env.DB.prepare('SELECT 1 FROM ledger WHERE voids = ?')
+      .bind(orig.entry_id).first();
+    if (already) return { ok: false, error: 'already_voided' };
+
+    /* Append-only: a void is a reversing row, never a delete. The original
+       stays in the ledger so the history always reconciles. */
+    await env.DB.prepare(`
+      INSERT INTO ledger (entry_id,session_id,ts,student_id,seller_id,type,product_id,qty,
+                          amount_usd,payment_method,bs_amount,bs_rate_used,debt_delta,note,voids)
+      VALUES (?,?,?,?,?,'ADJUSTMENT',?,?,?,?,?,?,?,?,?)
+    `).bind(uuid(), orig.session_id, new Date().toISOString(), orig.student_id, sellerId,
+            orig.product_id, -Number(orig.qty || 0), -Number(orig.amount_usd || 0),
+            orig.payment_method, orig.bs_amount == null ? null : -Number(orig.bs_amount),
+            orig.bs_rate_used, -Number(orig.debt_delta || 0),
+            'void of ' + orig.entry_id, orig.entry_id).run();
+
+    return { ok: true, balances: await balanceMap(env) };
+  },
+
+  async saveProducts(body, env) {
+    const sellerId = await auth(body, env);
+    if (!sellerId) return { ok: false, error: 'unauthorized' };
+
+    const seller = await env.DB.prepare('SELECT is_admin FROM sellers WHERE seller_id = ?')
+      .bind(sellerId).first();
+    if (!seller || seller.is_admin !== 1) return { ok: false, error: 'forbidden' };
+
+    const list = (body.products || []).filter(p => String(p.name || '').trim());
+    if (!list.length) return { ok: false, error: 'empty_catalog' };
+
+    const stmts = [env.DB.prepare('UPDATE products SET active = 0')];
+    list.forEach((p, i) => {
+      stmts.push(env.DB.prepare(
+        'INSERT INTO products (product_id, name, price_usd, active, sort) VALUES (?,?,?,1,?) ' +
+        'ON CONFLICT(product_id) DO UPDATE SET name=excluded.name, price_usd=excluded.price_usd, active=1, sort=excluded.sort'
+      ).bind(String(p.product_id || uuid().slice(0, 8)), String(p.name).trim(),
+             r2(p.price_usd || 0), i + 1));
+    });
+    await env.DB.batch(stmts);
+
+    const { results } = await env.DB.prepare(
+      'SELECT product_id, name, price_usd FROM products WHERE active = 1 ORDER BY sort, name'
+    ).all();
+    return { ok: true, products: results || [] };
+  },
+
+  async syncSheet(body, env) {
+    if (!await auth(body, env)) return { ok: false, error: 'unauthorized' };
+    await mirror(env);
+    return { ok: true, synced_at: new Date().toISOString() };
+  }
+};
+
+/* --------------------------------------------------- Google Sheets mirror */
+
+function b64url(bytes) {
+  let s = '';
+  bytes.forEach(b => { s += String.fromCharCode(b); });
+  return btoa(s).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
 }
 
-async function updatePending(){
-  const all = await outboxAll();
-  S.pending = all.length;
-  if (S.pending === 0) setLed('', 'Synced');
-  else setLed('pending', S.pending + ' waiting to sync');
-}
-function setLed(cls, txt){
-  $('led').className = 'led' + (cls ? ' ' + cls : '');
-  $('syncTxt').textContent = txt;
-}
-setInterval(flush, FLUSH_MS);
-window.addEventListener('online', flush);
-window.addEventListener('beforeunload', e => {
-  if (S.pending > 0) { e.preventDefault(); e.returnValue = ''; }
-});
+async function googleToken(env) {
+  const now = Math.floor(Date.now() / 1000);
+  const enc = o => b64url(new TextEncoder().encode(JSON.stringify(o)));
+  const input = enc({ alg: 'RS256', typ: 'JWT' }) + '.' + enc({
+    iss: env.GS_CLIENT_EMAIL,
+    scope: 'https://www.googleapis.com/auth/spreadsheets',
+    aud: 'https://oauth2.googleapis.com/token',
+    exp: now + 3600, iat: now
+  });
 
-/* ========================= recent / void ======================== */
-$('lnkRecent').onclick = async () => {
-  show('recent');
-  $('recList').innerHTML = '<p class="sub">Loading…</p>';
-  $('recErr').textContent = '';
-  if (S.pending > 0) { $('recErr').textContent = S.pending + ' sale(s) still syncing — they will appear once green.'; }
-  try {
-    const r = await api('recent', { session_id: S.session ? S.session.session_id : '' });
-    if (!r.ok) { $('recList').innerHTML = ''; $('recErr').textContent = why(r); return; }
-    if (!r.entries.length) { $('recList').innerHTML = '<p class="sub">Nothing recorded yet today.</p>'; return; }
-    $('recList').innerHTML = r.entries.map(e => {
-      const who = ((e.first_name || '') + ' ' + (e.last_name || '')).trim() || 'Unknown';
-      const what = e.type === 'PAYMENT' ? 'Payment'
-        : (e.product || 'Item') + (e.qty > 1 ? ' ×' + e.qty : '');
-      const how = e.payment_method === 'DEBT' ? 'on debt'
-        : e.payment_method === 'BS' ? 'in bolívares' : 'cash';
-      return `<div class="rec" data-id="${e.entry_id}">
-        <span class="l"><span class="n">${who}</span>
-        <span class="d">${what} · ${money(e.amount_usd)} · ${how} · ${new Date(e.ts).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})}</span></span>
-        <button class="v">Void</button></div>`;
-    }).join('');
-  } catch (err) { $('recList').innerHTML = ''; $('recErr').textContent = why(null, err); }
-};
-$('btnRecBack').onclick = () => show('sale');
-$('recList').onclick = async e => {
-  const b = e.target.closest('.v'); if (!b) return;
-  const row = b.closest('.rec');
-  if (!confirm('Void this entry? A reversing row will be added.')) return;
-  b.disabled = true; b.textContent = 'Voiding…';
-  try {
-    const r = await api('voidEntry', { entry_id: row.dataset.id });
-    if (!r.ok) { $('recErr').textContent = why(r); b.disabled = false; b.textContent = 'Void'; return; }
-    S.balances = r.balances;
-    row.classList.add('gone'); b.remove();
-    if (S.student) renderStudent();
-    toast('Voided.');
-  } catch (err) { $('recErr').textContent = why(null, err); b.disabled = false; b.textContent = 'Void'; }
-};
+  const pem = String(env.GS_PRIVATE_KEY).replace(/\\n/g, '\n')
+    .replace(/-----[A-Z ]+-----/g, '').replace(/\s+/g, '');
+  const der = Uint8Array.from(atob(pem), c => c.charCodeAt(0));
+  const key = await crypto.subtle.importKey('pkcs8', der,
+    { name: 'RSASSA-PKCS1-v1_5', hash: 'SHA-256' }, false, ['sign']);
 
-/* ============================ catalog =========================== */
-$('lnkAdmin').onclick = () => { renderAdmin(); show('admin'); };
-$('btnAdminBack').onclick = () => show('sale');
-function renderAdmin(){
-  $('admList').innerHTML = S.products.map((p, i) => `
-    <div class="adm" data-i="${i}">
-      <input class="an" value="${String(p.name).replace(/"/g,'&quot;')}" placeholder="Item name">
-      <input class="ap" type="number" step="0.25" min="0" value="${p.price_usd}">
-      <button class="x" title="Remove">×</button>
-    </div>`).join('');
-}
-$('admList').onclick = e => {
-  if (!e.target.classList.contains('x')) return;
-  const i = Number(e.target.closest('.adm').dataset.i);
-  S.products.splice(i, 1); renderAdmin();
-};
-$('btnAddProd').onclick = () => {
-  S.products.push({ product_id: uuid().slice(0,8), name:'', price_usd:0, active:true });
-  renderAdmin();
-};
-$('btnSaveProd').onclick = async () => {
-  const rows = [...document.querySelectorAll('.adm')].map((d, i) => ({
-    product_id: S.products[i].product_id,
-    name: d.querySelector('.an').value.trim(),
-    price_usd: parseFloat(d.querySelector('.ap').value) || 0,
-    active: true
-  })).filter(p => p.name);
-  if (!rows.length) { $('admErr').textContent = 'Add at least one item.'; return; }
-  $('admErr').textContent = ''; $('btnSaveProd').disabled = true;
-  try {
-    const r = await api('saveProducts', { products: rows });
-    if (!r.ok) { $('admErr').textContent = r.error === 'forbidden'
-      ? 'Only Erik and Santiago can change the catalog.' : 'Could not save.'; return; }
-    S.products = r.products; renderGrid(); renderAdmin();
-    toast('Catalog saved.');
-  } catch (e) { $('admErr').textContent = 'Cannot reach the server — ' + why(null, e); }
-  finally { $('btnSaveProd').disabled = false; }
-};
+  const sig = await crypto.subtle.sign('RSASSA-PKCS1-v1_5', key, new TextEncoder().encode(input));
+  const assertion = input + '.' + b64url(new Uint8Array(sig));
 
-/* ======================== session hygiene ======================= */
-function touch(){ S.lastAct = Date.now(); }
-document.addEventListener('touchstart', touch, { passive:true });
-document.addEventListener('click', touch);
-setInterval(() => {
-  if (S.token && Date.now() - S.lastAct > IDLE_MS) signOut(true);
-}, 30000);
-
-$('lnkOut').onclick = () => signOut(false);
-async function signOut(idle){
-  if (S.pending > 0 && !confirm(S.pending + ' sale(s) have not synced yet. Sign out anyway?')) return;
-  S = Object.assign(S, { token:null, seller:null, session:null, student:null, cart:{}, pin:'' });
-  drawPin(); show('pin');
-  $('pinErr').textContent = idle ? 'Signed out after 30 minutes idle. Enter your PIN.' : '';
+  const res = await fetch('https://oauth2.googleapis.com/token', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({
+      grant_type: 'urn:ietf:params:oauth:grant-type:jwt-bearer', assertion
+    })
+  });
+  const j = await res.json();
+  if (!j.access_token) throw new Error('google_auth_failed: ' + JSON.stringify(j));
+  return j.access_token;
 }
 
-/* ============================ boot ============================== */
-updatePending();
-show('pin');
-</script>
-</body>
-</html>
+const PAY_LABEL = { CASH_USD: 'Cash $', BS: 'Bolivares', DEBT: 'Debt' };
+const fmtDate = ts => new Intl.DateTimeFormat('en-CA',
+  { timeZone: TZ, year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date(ts));
+const fmtTime = ts => new Intl.DateTimeFormat('en-GB',
+  { timeZone: TZ, hour: '2-digit', minute: '2-digit' }).format(new Date(ts));
+
+async function buildSheets(env) {
+  const q = sql => env.DB.prepare(sql).all().then(r => r.results || []);
+
+  const sales = await q(`
+    SELECT l.ts, l.type, l.qty, l.amount_usd, l.payment_method, l.bs_amount,
+           l.bs_rate_used, l.debt_delta, l.note, substr(l.entry_id, 1, 6) AS ref,
+           COALESCE(st.first_name || ' ' || st.last_name, '?') AS student,
+           COALESCE(st.section, '') AS section,
+           COALESCE(p.name, '') AS item,
+           COALESCE(sel.first_name || ' ' || sel.last_name, '') AS seller
+    FROM ledger l
+    LEFT JOIN students st  ON st.student_id  = l.student_id
+    LEFT JOIN products p   ON p.product_id   = l.product_id
+    LEFT JOIN sellers  sel ON sel.seller_id  = l.seller_id
+    ORDER BY l.ts`);
+
+  const students = await q(`
+    SELECT st.first_name || ' ' || st.last_name AS student,
+           COALESCE(st.section, '') AS section,
+           COALESCE(b.bal, 0) AS owes, st.created_at,
+           COALESCE(sel.first_name, '') AS added_by
+    FROM students st
+    LEFT JOIN (SELECT student_id, ROUND(SUM(debt_delta), 2) AS bal
+               FROM ledger GROUP BY student_id) b ON b.student_id = st.student_id
+    LEFT JOIN sellers sel ON sel.seller_id = st.created_by
+    ORDER BY st.last_name, st.first_name`);
+
+  const days = await q(`
+    SELECT s.date, s.bs_rate, COALESCE(sel.first_name || ' ' || sel.last_name, '') AS opened_by
+    FROM sessions s LEFT JOIN sellers sel ON sel.seller_id = s.opened_by
+    ORDER BY s.date DESC`);
+
+  const items = await q(`SELECT name, price_usd, active FROM products ORDER BY sort, name`);
+
+  return {
+    Sales: [
+      ['Date', 'Time', 'Student', 'Section', 'Item', 'Qty', 'Amount',
+       'Paid with', 'Bolivares', 'Rate', 'Debt change', 'Seller', 'Note', 'Ref'],
+      ...sales.map(r => [
+        fmtDate(r.ts), fmtTime(r.ts), r.student, r.section,
+        r.type === 'PAYMENT' ? 'Payment' : r.type === 'ADJUSTMENT' ? 'Void' : (r.item || 'Item'),
+        r.qty || '', r.amount_usd || 0,
+        PAY_LABEL[r.payment_method] || r.payment_method || '',
+        r.bs_amount == null ? '' : r.bs_amount,
+        r.bs_rate_used == null ? '' : r.bs_rate_used,
+        r.debt_delta || 0, r.seller, r.note || '', r.ref
+      ])
+    ],
+    Debts: [
+      ['Student', 'Section', 'Owes'],
+      ...students.filter(r => r.owes > 0).sort((a, b) => b.owes - a.owes)
+        .map(r => [r.student, r.section, r.owes])
+    ],
+    Students: [
+      ['Student', 'Section', 'Owes now', 'First seen', 'Added by'],
+      ...students.map(r => [r.student, r.section, r.owes,
+        r.created_at ? fmtDate(r.created_at) : '', r.added_by])
+    ],
+    Items: [
+      ['Item', 'Price', 'Status'],
+      ...items.map(r => [r.name, r.price_usd, r.active ? 'On sale' : 'Hidden'])
+    ],
+    Days: [
+      ['Date', 'Bs per $1', 'Opened by'],
+      ...days.map(r => [r.date, r.bs_rate, r.opened_by])
+    ]
+  };
+}
+
+async function mirror(env) {
+  if (!env.GS_SHEET_ID || !env.GS_CLIENT_EMAIL || !env.GS_PRIVATE_KEY) return;
+  const token = await googleToken(env);
+  const base = `https://sheets.googleapis.com/v4/spreadsheets/${env.GS_SHEET_ID}`;
+  const hdr = { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' };
+  const post = (url, body) => fetch(url, { method: 'POST', headers: hdr, body: JSON.stringify(body) });
+
+  const meta = await (await fetch(base + '?fields=properties.title,sheets.properties', { headers: hdr })).json();
+  const existing = {};
+  (meta.sheets || []).forEach(s => { existing[s.properties.title] = s.properties.sheetId; });
+
+  // Create any missing tabs and set the spreadsheet title.
+  const setup = [];
+  if (meta.properties && meta.properties.title !== SHEET_TITLE) {
+    setup.push({ updateSpreadsheetProperties: { properties: { title: SHEET_TITLE }, fields: 'title' } });
+  }
+  Object.keys(TABS).forEach(t => {
+    if (!(t in existing)) setup.push({ addSheet: { properties: { title: t } } });
+  });
+  if (setup.length) {
+    const res = await (await post(base + ':batchUpdate', { requests: setup })).json();
+    (res.replies || []).forEach(r => {
+      if (r.addSheet) existing[r.addSheet.properties.title] = r.addSheet.properties.sheetId;
+    });
+  }
+
+  const data = await buildSheets(env);
+
+  for (const [tab, values] of Object.entries(data)) {
+    await post(`${base}/values/${tab}!A:Z:clear`, {});
+    await fetch(`${base}/values/${tab}!A1?valueInputOption=RAW`, {
+      method: 'PUT', headers: hdr, body: JSON.stringify({ values })
+    });
+  }
+
+  // Header styling, frozen row, currency formats, column widths.
+  const fmt = [];
+  for (const [tab, spec] of Object.entries(TABS)) {
+    const id = existing[tab];
+    if (id == null) continue;
+    const cols = data[tab][0].length;
+
+    fmt.push({ updateSheetProperties: {
+      properties: { sheetId: id, gridProperties: { frozenRowCount: 1 } },
+      fields: 'gridProperties.frozenRowCount' } });
+
+    fmt.push({ repeatCell: {
+      range: { sheetId: id, startRowIndex: 0, endRowIndex: 1, startColumnIndex: 0, endColumnIndex: cols },
+      cell: { userEnteredFormat: {
+        backgroundColor: { red: 0.357, green: 0.169, blue: 0.851 },
+        textFormat: { bold: true, foregroundColor: { red: 1, green: 1, blue: 1 } },
+        verticalAlignment: 'MIDDLE'
+      } },
+      fields: 'userEnteredFormat(backgroundColor,textFormat,verticalAlignment)' } });
+
+    spec.money.forEach(c => fmt.push({ repeatCell: {
+      range: { sheetId: id, startRowIndex: 1, startColumnIndex: c, endColumnIndex: c + 1 },
+      cell: { userEnteredFormat: { numberFormat: { type: 'CURRENCY', pattern: '$#,##0.00' } } },
+      fields: 'userEnteredFormat.numberFormat' } }));
+
+    spec.plain.forEach(c => fmt.push({ repeatCell: {
+      range: { sheetId: id, startRowIndex: 1, startColumnIndex: c, endColumnIndex: c + 1 },
+      cell: { userEnteredFormat: { numberFormat: { type: 'NUMBER', pattern: '#,##0.##' } } },
+      fields: 'userEnteredFormat.numberFormat' } }));
+
+    fmt.push({ autoResizeDimensions: {
+      dimensions: { sheetId: id, dimension: 'COLUMNS', startIndex: 0, endIndex: cols } } });
+  }
+  if (fmt.length) await post(base + ':batchUpdate', { requests: fmt });
+}
