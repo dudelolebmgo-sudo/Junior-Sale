@@ -322,6 +322,7 @@
 <!-- 6. Expenses (admins) -->
 <section id="v-exp" class="hide">
   <h1>Expenses</h1>
+  <div class="outcome ok" id="capBar">Checking available capital…</div>
   <p class="sub" id="expIntro">Money spent buying stock. Subtracted from the takings on the dashboard.</p>
 
   <div class="pay" id="expMode" style="grid-template-columns:1fr 1fr">
@@ -369,7 +370,7 @@ const FLUSH_MS = 2000;
 /* ============================ state ============================= */
 let S = {
   token:null, seller:null, session:null,
-  products:[], students:[], balances:{}, stock:{},
+  products:[], students:[], balances:{}, stock:{}, available:null,
   limit:20, near:15,
   student:null, cart:{}, method:null, payMethod:null,
   pin:'', pending:0, lastAct:Date.now(), flushing:false
@@ -953,11 +954,24 @@ $('expMode').onclick = e => {
   renderExpForm();
 };
 
+function renderCapBar(){
+  const a = S.available;
+  const el = $('capBar');
+  if (a == null) { el.className = 'outcome'; el.textContent = 'Available capital unknown.'; return; }
+  el.className = 'outcome ' + (a <= 0 ? 'bad' : a < 10 ? 'warn' : 'ok');
+  el.innerHTML = a <= 0
+    ? 'No capital left. Record money in before buying more stock.'
+    : `Available to spend: <b>${money(a)}</b>`;
+  renderExpForm();
+}
+
 async function loadMoneyList(){
   $('expList').innerHTML = '<p class="empty">Loading…</p>';
   try {
     const r = await api(S.expMode === 'CAPITAL' ? 'capital' : 'expenses');
     if (!r.ok) { $('expList').innerHTML = ''; $('expErr').textContent = why(r); return; }
+    if (r.available != null) S.available = r.available;
+    renderCapBar();
     renderExpList(S.expMode === 'CAPITAL' ? r.capital : r.expenses);
   } catch (err) { $('expList').innerHTML = ''; $('expErr').textContent = why(null, err); }
 }
@@ -990,7 +1004,15 @@ function renderExpForm(){
   $('expConv').textContent = S.expMethod === 'BS' && usd > 0
     ? `${parseFloat($('fExpAmt').value).toLocaleString()} Bs ÷ ${S.session.bs_rate} = ${money(usd)}` : '';
   const needsWhat = S.expMode !== 'CAPITAL';
-  $('btnExpAdd').disabled = !((!needsWhat || $('fExpWhat').value.trim()) && usd > 0 && S.expMethod);
+  let ok = (!needsWhat || $('fExpWhat').value.trim()) && usd > 0 && S.expMethod;
+  if (S.expMode !== 'CAPITAL' && S.available != null && usd > S.available) {
+    ok = false;
+    $('expErr').textContent =
+      `Not enough capital. ${money(S.available)} available, ${money(usd)} needed.`;
+  } else if ($('expErr').textContent.startsWith('Not enough capital')) {
+    $('expErr').textContent = '';
+  }
+  $('btnExpAdd').disabled = !ok;
 }
 
 $('btnExpAdd').onclick = async () => {
@@ -1008,7 +1030,16 @@ $('btnExpAdd').onclick = async () => {
           bs_amount: S.expMethod === 'BS' ? parseFloat($('fExpAmt').value) : '',
           bs_rate_used: S.expMethod === 'BS' ? S.session.bs_rate : ''
         });
-    if (!r.ok) { $('expErr').textContent = why(r); return; }
+    if (!r.ok) {
+      if (r.error === 'no_capital') {
+        S.available = r.available;
+        renderCapBar();
+        $('expErr').textContent =
+          `Not enough capital. ${money(r.available)} available, ${money(r.needed)} needed.`;
+      } else { $('expErr').textContent = why(r); }
+      return;
+    }
+    if (r.available != null) { S.available = r.available; renderCapBar(); }
     renderExpList(cap ? r.capital : r.expenses);
     $('fExpWhat').value = ''; $('fExpAmt').value = ''; $('expConv').textContent = '';
     toast(cap ? `${money(usd)} added to capital.` : `${money(usd)} expense recorded.`);
@@ -1038,6 +1069,7 @@ $('expList').onclick = async e => {
     const r = cap ? await api('voidCapital', { capital_id: id })
                   : await api('voidExpense', { expense_id: id });
     if (!r.ok) { $('expErr').textContent = why(r); b.disabled = false; return; }
+    if (r.available != null) { S.available = r.available; renderCapBar(); }
     renderExpList(cap ? r.capital : r.expenses); toast('Removed.');
   } catch (err) { $('expErr').textContent = why(null, err); b.disabled = false; }
 };
