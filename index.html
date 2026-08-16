@@ -968,40 +968,85 @@ $('expList').onclick = async e => {
 /* ============================ catalog =========================== */
 $('lnkAdmin').onclick = () => { renderAdmin(); show('admin'); };
 $('btnAdminBack').onclick = () => show('sale');
+
+/* Read what is on screen back into S.products. Without this, any re-render
+   (adding a row, deleting a row) rebuilds from stale state and silently
+   throws away whatever was just typed. */
+function harvestAdmin(){
+  document.querySelectorAll('.adm').forEach(d => {
+    const p = S.products.find(x => String(x.product_id) === d.dataset.id);
+    if (!p) return;
+    p.name = d.querySelector('.an').value;
+    p.price_usd = parseFloat(d.querySelector('.ap').value) || 0;
+  });
+}
+
 function renderAdmin(){
-  $('admList').innerHTML = S.products.map((p, i) => `
-    <div class="adm" data-i="${i}">
-      <input class="an" value="${String(p.name).replace(/"/g,'&quot;')}" placeholder="Item name">
+  if (!S.products.length) {
+    $('admList').innerHTML = '<p class="empty">No items. Tap “Add item” to start.</p>';
+    return;
+  }
+  $('admList').innerHTML = S.products.map(p => `
+    <div class="adm" data-id="${p.product_id}">
+      <input class="an" value="${String(p.name || '').replace(/"/g, '&quot;')}" placeholder="Item name">
       <input class="ap" type="number" step="0.25" min="0" value="${p.price_usd}">
       <button class="x" title="Remove">×</button>
     </div>`).join('');
 }
+
+$('admList').oninput = () => { touch(); harvestAdmin(); };
+
 $('admList').onclick = e => {
-  if (!e.target.classList.contains('x')) return;
-  const i = Number(e.target.closest('.adm').dataset.i);
-  S.products.splice(i, 1); renderAdmin();
-};
-$('btnAddProd').onclick = () => {
-  S.products.push({ product_id: uuid().slice(0,8), name:'', price_usd:0, active:true });
+  const b = e.target.closest('.x'); if (!b) return;
+  touch(); harvestAdmin();
+  const id = b.closest('.adm').dataset.id;
+  const p = S.products.find(x => String(x.product_id) === id);
+  if (p && p.name && !confirm(`Remove ${p.name} from the catalog?`)) return;
+  S.products = S.products.filter(x => String(x.product_id) !== id);
   renderAdmin();
 };
+
+$('btnAddProd').onclick = () => {
+  touch(); harvestAdmin();
+  S.products.push({ product_id: uuid().slice(0, 8), name: '', price_usd: 0 });
+  renderAdmin();
+  const inputs = document.querySelectorAll('.adm .an');
+  if (inputs.length) inputs[inputs.length - 1].focus();
+};
+
 $('btnSaveProd').onclick = async () => {
-  const rows = [...document.querySelectorAll('.adm')].map((d, i) => ({
-    product_id: S.products[i].product_id,
-    name: d.querySelector('.an').value.trim(),
-    price_usd: parseFloat(d.querySelector('.ap').value) || 0,
-    active: true
-  })).filter(p => p.name);
-  if (!rows.length) { $('admErr').textContent = 'Add at least one item.'; return; }
+  harvestAdmin();
+  const blank = S.products.filter(p => !String(p.name || '').trim());
+  if (blank.length) {
+    $('admErr').textContent = 'Every item needs a name. Fill it in or remove the empty row.';
+    return;
+  }
+  const rows = S.products.map((p, i) => ({
+    product_id: p.product_id, name: String(p.name).trim(),
+    price_usd: Number(p.price_usd) || 0, active: true, sort: i + 1
+  }));
+  if (!rows.length) { $('admErr').textContent = 'Add at least one item before saving.'; return; }
+
   $('admErr').textContent = ''; $('btnSaveProd').disabled = true;
+  $('btnSaveProd').textContent = 'Saving…';
   try {
     const r = await api('saveProducts', { products: rows });
-    if (!r.ok) { $('admErr').textContent = r.error === 'forbidden'
-      ? 'Only Erik and Santiago can change the catalog.' : 'Could not save.'; return; }
-    S.products = r.products; renderGrid(); renderAdmin();
+    if (!r.ok) {
+      $('admErr').textContent = r.error === 'forbidden'
+        ? 'Only Erik and Santiago can change the catalog.'
+        : r.error === 'unauthorized'
+          ? 'Your session expired. Sign out and back in.'
+          : 'Could not save — ' + why(r);
+      return;
+    }
+    S.products = r.products;
+    renderGrid(); renderAdmin();
     toast('Catalog saved.');
-  } catch (e) { $('admErr').textContent = 'Cannot reach the server — ' + why(null, e); }
-  finally { $('btnSaveProd').disabled = false; }
+  } catch (e) {
+    $('admErr').textContent = 'Cannot reach the server — ' + why(null, e);
+  } finally {
+    $('btnSaveProd').disabled = false; $('btnSaveProd').textContent = 'Save catalog';
+  }
 };
 
 /* ======================== session hygiene ======================= */
