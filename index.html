@@ -150,7 +150,12 @@
     color:var(--ok)}
   .grid .st.low{color:var(--warn)}
   .grid .st.out{color:var(--bad)}
-  .grid button.sold .pn,.grid button.sold .pp{opacity:.5}
+  .grid button.sold .pn,.grid button.sold .pp{opacity:.45}
+  .grid button.sold{cursor:not-allowed;background:var(--bg)}
+  .grid button.sold:active{transform:none}
+  .step button:disabled{opacity:.35;cursor:not-allowed}
+  .step button:disabled:active{transform:none}
+  .line .lprice.over{color:var(--bad);font-weight:600}
 
   /* catalog */
   .adm{background:var(--card);border:1px solid var(--line);border-radius:var(--r-sm);
@@ -317,9 +322,14 @@
 <!-- 6. Expenses (admins) -->
 <section id="v-exp" class="hide">
   <h1>Expenses</h1>
-  <p class="sub">Money spent buying stock. Subtracted from the takings on the dashboard.</p>
+  <p class="sub" id="expIntro">Money spent buying stock. Subtracted from the takings on the dashboard.</p>
 
-  <label for="fExpWhat">What was bought</label>
+  <div class="pay" id="expMode" style="grid-template-columns:1fr 1fr">
+    <button data-mode="STOCK" class="on">Bought stock</button>
+    <button data-mode="CAPITAL">Money put in</button>
+  </div>
+
+  <label for="fExpWhat" id="whatLabel">What was bought</label>
   <input id="fExpWhat" autocomplete="off" placeholder="e.g. 60 empanadas from Panaderia Rosa">
 
   <label>Paid with</label>
@@ -616,6 +626,11 @@ $('grid').onclick = e => {
   const b = e.target.closest('button'); if (!b) return;
   touch();
   const id = b.dataset.p;
+  if (stockLeft(id) <= 0) {
+    const p = S.products.find(x => String(x.product_id) === id);
+    toast(`${p ? p.name : 'That item'} is sold out.`);
+    return;
+  }
   S.cart[id] = (S.cart[id] || 0) + 1;
   renderGrid(); renderLines(); renderTotal();
 };
@@ -632,11 +647,12 @@ function renderLines(){
     const q = S.cart[id];
     return `<div class="line" data-p="${id}">
       <span class="ln"><span class="lname">${p.name}</span>
-      <span class="lprice">${money(p.price_usd)} each · ${money(p.price_usd * q)}</span></span>
+      <span class="lprice">${money(p.price_usd)} each · ${money(p.price_usd * q)}${
+        (S.stock[id] != null && q > S.stock[id]) ? ` · only ${S.stock[id]} in stock` : ''}</span></span>
       <span class="step">
         <button data-d="-1" aria-label="One less">−</button>
         <span class="q">${q}</span>
-        <button data-d="1" aria-label="One more">+</button>
+        <button data-d="1" aria-label="One more"${stockLeft(id) <= 0 ? ' disabled' : ''}>+</button>
       </span></div>`;
   }).join('');
 }
@@ -644,7 +660,9 @@ $('lines').onclick = e => {
   const b = e.target.closest('button[data-d]'); if (!b) return;
   touch();
   const id = b.closest('.line').dataset.p;
-  S.cart[id] = (S.cart[id] || 0) + Number(b.dataset.d);
+  const step = Number(b.dataset.d);
+  if (step > 0 && stockLeft(id) <= 0) { toast('No more of those in stock.'); return; }
+  S.cart[id] = (S.cart[id] || 0) + step;
   if (S.cart[id] <= 0) delete S.cart[id];
   renderGrid(); renderLines(); renderTotal();
 };
@@ -915,14 +933,38 @@ $('recList').onclick = async e => {
 /* =========================== expenses =========================== */
 S.expMethod = null;
 
-$('lnkExp').onclick = async () => {
-  show('exp'); $('expErr').textContent = '';
+S.expMode = 'STOCK';
+
+$('expMode').onclick = e => {
+  const b = e.target.closest('[data-mode]'); if (!b) return;
+  touch(); S.expMode = b.dataset.mode;
+  document.querySelectorAll('#expMode [data-mode]').forEach(x =>
+    x.classList.toggle('on', x.dataset.mode === S.expMode));
+  const cap = S.expMode === 'CAPITAL';
+  $('whatLabel').textContent = cap ? 'Note (optional)' : 'What was bought';
+  $('fExpWhat').placeholder = cap ? 'e.g. Class fund, Erik fronting cash'
+    : 'e.g. 60 empanadas from Panaderia Rosa';
+  $('expIntro').textContent = cap
+    ? 'Money put in to buy stock with. Adds to what is available to spend.'
+    : 'Money spent buying stock. Subtracted from the takings on the dashboard.';
+  $('btnExpAdd').textContent = cap ? 'Record money in' : 'Record expense';
+  $('fExpWhat').value = ''; $('fExpAmt').value = ''; $('expConv').textContent = '';
+  loadMoneyList();
+  renderExpForm();
+};
+
+async function loadMoneyList(){
   $('expList').innerHTML = '<p class="empty">Loading…</p>';
   try {
-    const r = await api('expenses');
-    renderExpList(r.ok ? r.expenses : []);
-    if (!r.ok) $('expErr').textContent = why(r);
+    const r = await api(S.expMode === 'CAPITAL' ? 'capital' : 'expenses');
+    if (!r.ok) { $('expList').innerHTML = ''; $('expErr').textContent = why(r); return; }
+    renderExpList(S.expMode === 'CAPITAL' ? r.capital : r.expenses);
   } catch (err) { $('expList').innerHTML = ''; $('expErr').textContent = why(null, err); }
+}
+
+$('lnkExp').onclick = async () => {
+  show('exp'); $('expErr').textContent = '';
+  await loadMoneyList();
 };
 $('btnExpBack').onclick = () => show('sale');
 
@@ -947,24 +989,29 @@ function renderExpForm(){
   const usd = expUsd();
   $('expConv').textContent = S.expMethod === 'BS' && usd > 0
     ? `${parseFloat($('fExpAmt').value).toLocaleString()} Bs ÷ ${S.session.bs_rate} = ${money(usd)}` : '';
-  $('btnExpAdd').disabled = !($('fExpWhat').value.trim() && usd > 0 && S.expMethod);
+  const needsWhat = S.expMode !== 'CAPITAL';
+  $('btnExpAdd').disabled = !((!needsWhat || $('fExpWhat').value.trim()) && usd > 0 && S.expMethod);
 }
 
 $('btnExpAdd').onclick = async () => {
   const usd = expUsd();
   $('btnExpAdd').disabled = true; $('btnExpAdd').textContent = 'Saving…';
   try {
-    const r = await api('addExpense', {
-      expense_id: uuid(), session_id: S.session ? S.session.session_id : '',
-      description: $('fExpWhat').value.trim(), amount_usd: usd,
-      paid_method: S.expMethod,
-      bs_amount: S.expMethod === 'BS' ? parseFloat($('fExpAmt').value) : '',
-      bs_rate_used: S.expMethod === 'BS' ? S.session.bs_rate : ''
-    });
+    const cap = S.expMode === 'CAPITAL';
+    const r = cap
+      ? await api('addCapital', { capital_id: uuid(), amount_usd: usd,
+          note: $('fExpWhat').value.trim() })
+      : await api('addExpense', {
+          expense_id: uuid(), session_id: S.session ? S.session.session_id : '',
+          description: $('fExpWhat').value.trim(), amount_usd: usd,
+          paid_method: S.expMethod,
+          bs_amount: S.expMethod === 'BS' ? parseFloat($('fExpAmt').value) : '',
+          bs_rate_used: S.expMethod === 'BS' ? S.session.bs_rate : ''
+        });
     if (!r.ok) { $('expErr').textContent = why(r); return; }
-    renderExpList(r.expenses);
+    renderExpList(cap ? r.capital : r.expenses);
     $('fExpWhat').value = ''; $('fExpAmt').value = ''; $('expConv').textContent = '';
-    toast(`${money(usd)} expense recorded.`);
+    toast(cap ? `${money(usd)} added to capital.` : `${money(usd)} expense recorded.`);
   } catch (err) { $('expErr').textContent = why(null, err); }
   finally { $('btnExpAdd').textContent = 'Record expense'; renderExpForm(); }
 };
@@ -973,21 +1020,25 @@ function renderExpList(list){
   if (!list || !list.length) {
     $('expList').innerHTML = '<p class="empty">Nothing recorded yet.</p>'; return;
   }
+  const cap = S.expMode === 'CAPITAL';
   const total = list.reduce((a, e) => a + (e.amount_usd || 0), 0);
-  $('expList').innerHTML = list.map(e => `<div class="rec" data-id="${e.expense_id}">
-      <span class="l"><span class="n">${money(e.amount_usd)} · ${e.description}</span>
+  $('expList').innerHTML = list.map(e => `<div class="rec" data-id="${e.capital_id || e.expense_id}">
+      <span class="l"><span class="n">${money(e.amount_usd)} · ${e.note || e.description}</span>
       <span class="d">${new Date(e.ts).toLocaleDateString()} · ${e.seller}</span></span>
       <button class="v">Remove</button></div>`).join('')
-    + `<p class="sub" style="margin-top:14px">Total spent: <b>${money(total)}</b></p>`;
+    + `<p class="sub" style="margin-top:14px">${cap ? 'Total put in' : 'Total spent'}: <b>${money(total)}</b></p>`;
 }
 $('expList').onclick = async e => {
   const b = e.target.closest('.v'); if (!b) return;
   if (!confirm('Remove this expense?')) return;
   b.disabled = true;
   try {
-    const r = await api('voidExpense', { expense_id: b.closest('.rec').dataset.id });
+    const cap = S.expMode === 'CAPITAL';
+    const id = b.closest('.rec').dataset.id;
+    const r = cap ? await api('voidCapital', { capital_id: id })
+                  : await api('voidExpense', { expense_id: id });
     if (!r.ok) { $('expErr').textContent = why(r); b.disabled = false; return; }
-    renderExpList(r.expenses); toast('Expense removed.');
+    renderExpList(cap ? r.capital : r.expenses); toast('Removed.');
   } catch (err) { $('expErr').textContent = why(null, err); b.disabled = false; }
 };
 
