@@ -1076,11 +1076,24 @@ $('btnSaveProd').onclick = async () => {
           : 'Could not save — ' + why(r);
       return;
     }
+    /* Keep what was typed if the server reply carries no stock — blanking a
+       just-entered count is worse than showing a possibly stale one. */
+    const typed = {};
+    S.products.forEach(p => { if (p.stock != null) typed[p.product_id] = p.stock; });
+
     S.products = r.products;
-    if (r.stock) S.stock = r.stock;
-    S.products.forEach(p => { delete p.stock; });
-    renderGrid(); renderAdmin();
-    toast('Catalog and stock saved.');
+    if (r.stock) {
+      S.stock = r.stock;
+      S.products.forEach(p => { delete p.stock; });
+      renderGrid(); renderAdmin();
+      toast('Catalog and stock saved.');
+    } else {
+      Object.assign(S.stock, typed);
+      S.products.forEach(p => { delete p.stock; });
+      renderGrid(); renderAdmin();
+      $('admErr').textContent =
+        'Prices saved, but stock was not stored. The Worker needs redeploying — run wrangler deploy.';
+    }
   } catch (e) {
     $('admErr').textContent = 'Cannot reach the server — ' + why(null, e);
   } finally {
