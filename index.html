@@ -248,7 +248,7 @@
   <label for="fDate">Date</label>
   <input type="date" id="fDate">
   <label for="fRate">Bolívar rate (Bs per $1)</label>
-  <input type="number" id="fRate" inputmode="decimal" step="0.01" min="0" placeholder="e.g. 235.50">
+  <input type="text" id="fRate" inputmode="decimal" placeholder="e.g. 235,50">
   <p class="sub" id="sesNote" style="margin-top:10px"></p>
   <button class="btn" id="btnSession">Open session</button>
   <div class="err" id="sesErr"></div>
@@ -286,7 +286,7 @@
 
     <div id="paidWrap">
       <label for="fPaid" id="paidLabel">Amount handed over ($)</label>
-      <input type="number" id="fPaid" inputmode="decimal" step="0.01" min="0">
+      <input type="text" id="fPaid" inputmode="decimal">
       <div class="conv" id="paidConv"></div>
     </div>
 
@@ -340,7 +340,7 @@
   </div>
 
   <label for="fExpAmt" id="expLabel">Amount spent ($)</label>
-  <input type="number" id="fExpAmt" inputmode="decimal" step="0.01" min="0">
+  <input type="text" id="fExpAmt" inputmode="decimal">
   <div class="conv" id="expConv"></div>
 
   <button class="btn" id="btnExpAdd" disabled>Record expense</button>
@@ -376,6 +376,12 @@ let S = {
   pin:'', pending:0, lastAct:Date.now(), flushing:false
 };
 const $ = id => document.getElementById(id);
+/* Spanish-locale keyboards offer a comma as the decimal separator, and a
+   number input rejects it silently. Parse both. */
+const num = v => {
+  const n = parseFloat(String(v == null ? '' : v).replace(',', '.').replace(/[^0-9.\-]/g, ''));
+  return isNaN(n) ? NaN : n;
+};
 const money = n => '$' + (Math.round(n*100)/100).toFixed(2);
 const uuid = () => (crypto.randomUUID ? crypto.randomUUID()
   : 'x'+Date.now()+Math.random().toString(16).slice(2));
@@ -500,7 +506,7 @@ async function login(){
 
 /* ============================ session =========================== */
 $('btnSession').onclick = async () => {
-  const date = $('fDate').value, rate = parseFloat($('fRate').value);
+  const date = $('fDate').value, rate = num($('fRate').value);
   if (!date) { $('sesErr').textContent = 'Pick a date.'; return; }
   if (!(rate > 0)) { $('sesErr').textContent = 'Enter the bolívar rate.'; return; }
   $('sesErr').textContent = ''; $('btnSession').disabled = true;
@@ -704,7 +710,7 @@ $('fPaid').oninput = () => { touch(); renderTotal(); };
 /* How much the student actually handed over, in dollars. */
 function paidUsd(){
   if (S.method === 'DEBT' || !S.method) return 0;
-  const v = parseFloat($('fPaid').value);
+  const v = num($('fPaid').value);
   if (!(v > 0)) return 0;
   return S.method === 'BS' ? r2(v / S.session.bs_rate) : r2(v);
 }
@@ -719,7 +725,7 @@ function renderTotal(){
   $('total').textContent = money(total);
 
   if (S.method === 'BS') {
-    const bs = parseFloat($('fPaid').value);
+    const bs = num($('fPaid').value);
     $('paidConv').textContent = bs > 0
       ? `${bs.toLocaleString()} Bs ÷ ${S.session.bs_rate} = ${money(paid)}` : '';
     const off = total > 0 && bs > 0 ? Math.abs(paid - total) / total : 0;
@@ -790,7 +796,7 @@ $('btnConfirm').onclick = async () => {
       student_id: S.student.student_id, type: 'PAYMENT',
       product_id: '', qty: '', amount_usd: paid,
       payment_method: S.method,
-      bs_amount: S.method === 'BS' ? parseFloat($('fPaid').value) : '',
+      bs_amount: S.method === 'BS' ? num($('fPaid').value) : '',
       bs_rate_used: S.method === 'BS' ? S.session.bs_rate : '',
       debt_delta: -paid, note: ''
     });
@@ -994,7 +1000,7 @@ $('fExpWhat').oninput = renderExpForm;
 $('fExpAmt').oninput = renderExpForm;
 
 function expUsd(){
-  const v = parseFloat($('fExpAmt').value);
+  const v = num($('fExpAmt').value);
   if (!(v > 0)) return 0;
   return S.expMethod === 'BS' ? r2(v / S.session.bs_rate) : r2(v);
 }
@@ -1002,7 +1008,7 @@ function renderExpForm(){
   touch();
   const usd = expUsd();
   $('expConv').textContent = S.expMethod === 'BS' && usd > 0
-    ? `${parseFloat($('fExpAmt').value).toLocaleString()} Bs ÷ ${S.session.bs_rate} = ${money(usd)}` : '';
+    ? `${num($('fExpAmt').value).toLocaleString()} Bs ÷ ${S.session.bs_rate} = ${money(usd)}` : '';
   const needsWhat = S.expMode !== 'CAPITAL';
   let ok = (!needsWhat || $('fExpWhat').value.trim()) && usd > 0 && S.expMethod;
   if (S.expMode !== 'CAPITAL' && S.available != null && usd > S.available) {
@@ -1027,7 +1033,7 @@ $('btnExpAdd').onclick = async () => {
           expense_id: uuid(), session_id: S.session ? S.session.session_id : '',
           description: $('fExpWhat').value.trim(), amount_usd: usd,
           paid_method: S.expMethod,
-          bs_amount: S.expMethod === 'BS' ? parseFloat($('fExpAmt').value) : '',
+          bs_amount: S.expMethod === 'BS' ? num($('fExpAmt').value) : '',
           bs_rate_used: S.expMethod === 'BS' ? S.session.bs_rate : ''
         });
     if (!r.ok) {
@@ -1086,9 +1092,9 @@ function harvestAdmin(){
     const p = S.products.find(x => String(x.product_id) === d.dataset.id);
     if (!p) return;
     p.name = d.querySelector('.an').value;
-    p.price_usd = parseFloat(d.querySelector('.ap').value) || 0;
+    p.price_usd = num(d.querySelector('.ap').value) || 0;
     const sv = d.querySelector('.as').value;
-    p.stock = sv === '' ? 0 : Math.max(0, Math.round(Number(sv) || 0));
+    p.stock = sv === '' ? 0 : Math.max(0, Math.round(num(sv) || 0));
   });
 }
 
@@ -1105,9 +1111,9 @@ function renderAdmin(){
       </div>
       <div class="admbot">
         <label><span>Price ($)</span>
-          <input class="ap" type="number" step="0.25" min="0" value="${p.price_usd}"></label>
+          <input class="ap" type="text" inputmode="decimal" value="${p.price_usd}"></label>
         <label><span>In stock</span>
-          <input class="as" type="number" step="1" min="0"
+          <input class="as" type="text" inputmode="numeric"
             value="${p.stock != null ? p.stock : (S.stock[p.product_id] || 0)}"></label>
       </div>
     </div>`).join('');
