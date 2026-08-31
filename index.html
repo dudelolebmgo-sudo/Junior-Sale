@@ -356,7 +356,7 @@
     <span class="sync"><span class="led" id="led"></span><span id="syncTxt">Synced</span></span>
     <button id="lnkRecent">Recent</button>
     <button id="lnkExp">Spend</button>
-    <button id="lnkAdmin" class="hide">Catalog</button>
+    <button id="lnkAdmin">Catalog</button>
     <button id="lnkOut" class="out">Sign out</button>
   </div>
 </div>
@@ -488,7 +488,7 @@ async function login(){
     S.stock = r.stock || {};
     S.limit = r.debt_limit; S.near = r.near_limit; S.session = r.session;
     $('pinErr').textContent = '';
-    $('lnkAdmin').classList.toggle('hide', !S.seller.is_admin);
+    $('lnkAdmin').classList.remove('hide');
     $('lnkExp').classList.remove('hide');
     $('sesWho').textContent = 'Signed in as ' + S.seller.first_name + ' ' + S.seller.last_name + '.';
     $('fDate').value = r.session ? r.session.date : new Date().toISOString().slice(0,10);
@@ -1159,7 +1159,7 @@ $('btnSaveProd').onclick = async () => {
     const r = await api('saveProducts', { products: rows });
     if (!r.ok) {
       $('admErr').textContent = r.error === 'forbidden'
-        ? 'Only Erik and Santiago can change the catalog.'
+        ? 'Not allowed. Sign out and back in.'
         : r.error === 'unauthorized'
           ? 'Your session expired. Sign out and back in.'
           : 'Could not save — ' + why(r);
