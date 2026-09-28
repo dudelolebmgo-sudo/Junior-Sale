@@ -167,6 +167,22 @@
     text-transform:uppercase;color:var(--muted);margin-bottom:5px}
   .adm .x{border:0;background:transparent;color:var(--muted);font-size:22px;cursor:pointer}
 
+  .cl{background:var(--card);border:1px solid var(--line);border-radius:var(--r-sm);
+    padding:12px;margin-top:9px;box-shadow:var(--shadow)}
+  .cl .cn{font-weight:700;font-size:15px}
+  .cl .cd{color:var(--muted);font-size:13px;margin-top:2px}
+  .cl .cr{display:grid;grid-template-columns:1fr 96px;gap:10px;align-items:center;margin-top:9px}
+  .cl input{padding:10px;text-align:center;font-weight:700}
+  .cl.short{border-color:var(--bad)}
+  .cl.over{border-color:var(--warn)}
+  .rost{font-size:14px;line-height:1.5}
+  .rost b{display:block;font-size:11px;letter-spacing:.04em;text-transform:uppercase;
+    color:var(--muted);margin:8px 0 2px}
+  .rost .live{color:var(--ok);font-weight:700}
+  .warnbox{margin-top:12px;padding:12px 13px;border-radius:var(--r-sm);
+    background:var(--bad-soft);color:var(--bad);font-size:14px;font-weight:600;
+    border-left:3px solid var(--bad)}
+
   /* recent */
   .rec{background:var(--card);border:1px solid var(--line);border-radius:var(--r-sm);
     padding:12px 13px;margin-top:9px;display:flex;justify-content:space-between;
@@ -235,7 +251,22 @@
 <!-- 1. PIN -->
 <section id="v-pin">
   <h1>Junior sale</h1>
-  <p class="sub">Enter your seller PIN.</p>
+
+  <label>What kind of day is it?</label>
+  <div class="pay" id="dayType" style="grid-template-columns:1fr 1fr">
+    <button data-d="normal" class="on">Normal day</button>
+    <button data-d="advisory">Advisory day</button>
+  </div>
+
+  <div id="onNow" class="who" style="margin-top:18px"></div>
+  <div id="issueBox"></div>
+
+  <label for="fFirst">First name</label>
+  <input id="fFirst" autocomplete="off" autocapitalize="words" placeholder="e.g. Martina">
+  <label for="fLast">Last name</label>
+  <input id="fLast" autocomplete="off" autocapitalize="words" placeholder="e.g. Celis">
+
+  <label>PIN</label>
   <div class="dots" id="dots"></div>
   <div class="pad" id="pad"></div>
   <div class="err" id="pinErr"></div>
@@ -351,12 +382,26 @@
   <div id="expList"></div>
 </section>
 
+<!-- 7. End of shift count -->
+<section id="v-close" class="hide">
+  <h1>Count before you go</h1>
+  <p class="sub" id="closeMeta"></p>
+  <div id="closeLines"></div>
+
+  <div class="total"><span class="lbl">Money you should have</span><span class="amt" id="closeMoney">$0.00</span></div>
+  <div class="outcome" id="closeOut"></div>
+
+  <button class="btn" id="btnCloseDone">Finish and sign out</button>
+  <button class="btn ghost" id="btnCloseBack">Back</button>
+  <div class="err" id="closeErr"></div>
+</section>
+
 <div class="bar hide" id="bar">
   <div class="nav">
     <span class="sync"><span class="led" id="led"></span><span id="syncTxt">Synced</span></span>
     <button id="lnkRecent">Recent</button>
     <button id="lnkExp">Spend</button>
-    <button id="lnkAdmin">Catalog</button>
+    <button id="lnkAdmin" class="hide">Catalog</button>
     <button id="lnkOut" class="out">Sign out</button>
   </div>
 </div>
@@ -371,6 +416,7 @@ const FLUSH_MS = 2000;
 let S = {
   token:null, seller:null, session:null,
   products:[], students:[], balances:{}, stock:{}, available:null,
+  dayType:'normal', period:null, shiftId:'', canEditCatalog:false,
   limit:20, near:15,
   student:null, cart:{}, method:null, payMethod:null,
   pin:'', pending:0, lastAct:Date.now(), flushing:false
@@ -444,7 +490,7 @@ function why(r, err){
 
 /* ============================ views ============================= */
 function show(v){
-  ['pin','session','sale','admin','recent','exp'].forEach(n => $('v-'+n).classList.toggle('hide', n !== v));
+  ['pin','session','sale','admin','recent','exp','close'].forEach(n => $('v-'+n).classList.toggle('hide', n !== v));
   $('bar').classList.toggle('hide', v === 'pin');
   window.scrollTo(0,0);
 }
@@ -472,23 +518,76 @@ $('pad').onclick = e => {
 };
 drawPin();
 
+$('dayType').onclick = e => {
+  const b = e.target.closest('[data-d]'); if (!b) return;
+  S.dayType = b.dataset.d;
+  document.querySelectorAll('#dayType [data-d]').forEach(x =>
+    x.classList.toggle('on', x.dataset.d === S.dayType));
+  loadToday();
+};
+
+async function loadToday(){
+  $('onNow').innerHTML = '<span class="rost">Checking the rota…</span>';
+  try {
+    const r = await api('today', { day_type: S.dayType });
+    if (!r.ok) { $('onNow').innerHTML = '<span class="rost">Could not load the rota.</span>'; return; }
+
+    if (r.holiday) {
+      $('onNow').innerHTML = '<span class="rost"><b>This week</b>October break — no sale.</span>';
+    } else {
+      const mark = p => r.period === p ? ' <span class="live">· selling now</span>' : '';
+      $('onNow').innerHTML = `<span class="rost">
+        <b>Week ${r.week} · ${r.date} · ${r.time}</b>
+        <b>Break${mark('BREAK')}</b>${r.breaks.join(', ') || '—'}
+        <b>Lunch${mark('LUNCH')}</b>${r.lunch.join(', ') || '—'}
+        ${r.after_hours ? '<b style="color:var(--bad)">Sales are closed for today</b>' : ''}
+      </span>`;
+    }
+
+    $('issueBox').innerHTML = (r.issues || []).map(i => `<div class="warnbox">
+      ${Math.abs(i.missing)} item${Math.abs(i.missing) === 1 ? '' : 's'}
+      ${i.missing > 0 ? 'missing' : 'unaccounted'} from ${i.date} ${i.period.toLowerCase()} —
+      ${i.sellers.join(', ')}. Still to be counted and recorded.</div>`).join('');
+  } catch (err) {
+    $('onNow').innerHTML = '<span class="rost">No connection — check the network.</span>';
+  }
+}
+
+const ROTA_MSG = {
+  not_your_shift: 'You are not on this shift. Only the sellers listed above can sign in right now.',
+  not_your_week:  'You are not on the rota this week.',
+  after_hours:    'Sales are closed for today.',
+  holiday:        'No sale this week — October break.',
+  before_start:   'The rota has not started yet.'
+};
+
 async function login(){
   const pin = S.pin; S.pin = ''; drawPin();
+  const first = $('fFirst').value.trim(), last = $('fLast').value.trim();
+  if (!first || !last) { $('pinErr').textContent = 'Type your first and last name first.'; return; }
   $('pinErr').textContent = 'Checking…';
   try {
-    const r = await api('auth', { pin });
+    const r = await api('auth', { pin, first_name: first, last_name: last, day_type: S.dayType });
     if (!r.ok) {
+      if (ROTA_MSG[r.error]) {
+        $('pinErr').textContent = ROTA_MSG[r.error];
+        if (r.on_now && r.on_now.length) {
+          $('pinErr').textContent += ' On now: ' + r.on_now.join(', ') + '.';
+        }
+        return;
+      }
       $('pinErr').textContent = r.error === 'locked'
         ? 'Too many wrong PINs. Wait five minutes.'
-        : 'That PIN did not match. Try again.';
+        : 'That name and PIN do not match. Check both.';
       return;
     }
     S.token = r.token; S.seller = r.seller;
     S.products = r.products; S.students = r.students; S.balances = r.balances;
     S.stock = r.stock || {};
     S.limit = r.debt_limit; S.near = r.near_limit; S.session = r.session;
+    S.period = r.period; S.shiftId = r.shift_id || ''; S.canEditCatalog = !!r.can_edit_catalog;
     $('pinErr').textContent = '';
-    $('lnkAdmin').classList.remove('hide');
+    $('lnkAdmin').classList.toggle('hide', !S.canEditCatalog);
     $('lnkExp').classList.remove('hide');
     $('sesWho').textContent = 'Signed in as ' + S.seller.first_name + ' ' + S.seller.last_name + '.';
     $('fDate').value = r.session ? r.session.date : new Date().toISOString().slice(0,10);
@@ -1198,17 +1297,107 @@ setInterval(() => {
   if (S.token && Date.now() - S.lastAct > IDLE_MS) signOut(true);
 }, 30000);
 
-$('lnkOut').onclick = () => signOut(false);
-async function signOut(idle){
+$('lnkOut').onclick = async () => {
   if (S.pending > 0 && !confirm(S.pending + ' sale(s) have not synced yet. Sign out anyway?')) return;
-  S = Object.assign(S, { token:null, seller:null, session:null, student:null, cart:{}, pin:'' });
-  drawPin(); show('pin');
+  if (!S.shiftId) return signOut(false);
+  await openCloseScreen();
+};
+
+/* ====================== end-of-shift count ====================== */
+S.closeLines = [];
+
+async function openCloseScreen(){
+  show('close');
+  $('closeErr').textContent = '';
+  $('closeLines').innerHTML = '<p class="empty">Loading…</p>';
+  try {
+    const r = await api('shiftSummary', { shift_id: S.shiftId });
+    if (!r.ok) { $('closeErr').textContent = why(r) + ' — signing out instead.'; return; }
+    S.closeLines = r.lines;
+    $('closeMeta').textContent =
+      `${r.date} · ${r.period === 'BREAK' ? 'Break' : 'Lunch'} · count every item before signing out.`;
+    $('closeMoney').textContent = money(r.money_due);
+    renderCloseLines();
+  } catch (err) { $('closeErr').textContent = why(null, err); }
+}
+
+function renderCloseLines(){
+  $('closeLines').innerHTML = S.closeLines.map(l => `
+    <div class="cl" data-p="${l.product_id}">
+      <span class="cn">${l.name}</span>
+      <span class="cd">Started with ${l.started} · sold ${l.sold} · should have <b>${l.expected}</b></span>
+      <span class="cr"><span class="cd">How many are left?</span>
+        <input class="cc" type="text" inputmode="numeric" placeholder="count"></span>
+    </div>`).join('');
+  renderCloseOut();
+}
+
+$('closeLines').oninput = renderCloseOut;
+
+function renderCloseOut(){
+  touch();
+  let diff = 0, filled = 0;
+  S.closeLines.forEach(l => {
+    const d = document.querySelector(`.cl[data-p="${l.product_id}"]`);
+    if (!d) return;
+    const v = d.querySelector('.cc').value.trim();
+    if (v === '') { d.className = 'cl'; return; }
+    filled++;
+    const c = Math.round(num(v) || 0);
+    const gap = l.expected - c;
+    diff += gap;
+    d.className = 'cl' + (gap > 0 ? ' short' : gap < 0 ? ' over' : '');
+  });
+
+  const all = filled === S.closeLines.length;
+  const o = $('closeOut');
+  if (!all) {
+    o.className = 'outcome';
+    o.textContent = `Count every item — ${filled} of ${S.closeLines.length} done.`;
+  } else if (diff === 0) {
+    o.className = 'outcome ok';
+    o.textContent = 'Everything adds up. Nothing missing.';
+  } else if (diff > 0) {
+    o.className = 'outcome bad';
+    o.innerHTML = `<b>${diff}</b> item${diff === 1 ? '' : 's'} missing. You can still sign out, but this will show on the home screen until it is sorted.`;
+  } else {
+    o.className = 'outcome warn';
+    o.innerHTML = `<b>${-diff}</b> more than expected. Check the count.`;
+  }
+  $('btnCloseDone').disabled = !all;
+  S.closeDiff = diff;
+}
+
+$('btnCloseBack').onclick = () => show('sale');
+
+$('btnCloseDone').onclick = async () => {
+  const counted = {};
+  S.closeLines.forEach(l => {
+    const d = document.querySelector(`.cl[data-p="${l.product_id}"]`);
+    if (d) counted[l.product_id] = Math.round(num(d.querySelector('.cc').value) || 0);
+  });
+  $('btnCloseDone').disabled = true; $('btnCloseDone').textContent = 'Saving…';
+  try {
+    const r = await api('closeShift', { shift_id: S.shiftId, counted, missing: S.closeDiff || 0 });
+    if (!r.ok) { $('closeErr').textContent = why(r); return; }
+    toast(S.closeDiff ? 'Count recorded with a difference.' : 'Count recorded. All square.');
+    signOut(false, true);
+  } catch (err) { $('closeErr').textContent = why(null, err); }
+  finally { $('btnCloseDone').disabled = false; $('btnCloseDone').textContent = 'Finish and sign out'; }
+};
+async function signOut(idle, counted){
+  if (!counted && S.pending > 0
+      && !confirm(S.pending + ' sale(s) have not synced yet. Sign out anyway?')) return;
+  S = Object.assign(S, { token:null, seller:null, session:null, student:null, cart:{}, pin:'',
+    shiftId:'', period:null, closeLines:[], closeDiff:0 });
+  drawPin(); show('pin'); loadToday();
   $('pinErr').textContent = idle ? 'Signed out after 30 minutes idle. Enter your PIN.' : '';
 }
 
 /* ============================ boot ============================== */
 updatePending();
 show('pin');
+loadToday();
 </script>
 </body>
 </html>
