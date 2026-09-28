@@ -445,7 +445,7 @@ const FLUSH_MS = 2000;
 let S = {
   token:null, seller:null, session:null,
   products:[], students:[], balances:{}, stock:{}, available:null,
-  dayType:'normal', period:null, shiftId:'', canEditCatalog:false, selfIds:[],
+  dayType:'normal', period:null, shiftId:'', canEditCatalog:false, selfIds:[], blockedIds:[],
   limit:20, near:15,
   student:null, cart:{}, method:null, payMethod:null,
   pin:'', pending:0, lastAct:Date.now(), flushing:false
@@ -634,7 +634,7 @@ async function login(){
     S.stock = r.stock || {};
     S.limit = r.debt_limit; S.near = r.near_limit; S.session = r.session;
     S.period = r.period; S.shiftId = r.shift_id || ''; S.canEditCatalog = !!r.can_edit_catalog;
-    S.selfIds = r.self_ids || [];
+    S.selfIds = r.self_ids || []; S.blockedIds = r.blocked_ids || [];
     $('pinErr').textContent = '';
     $('lnkAdmin').classList.toggle('hide', !S.canEditCatalog);
     $('lnkExp').classList.remove('hide');
@@ -687,6 +687,9 @@ $('fStudent').oninput = () => {
     if (S.selfIds.includes(String(s.student_id))) {
       return `<button disabled style="opacity:.45">${nameOf(s)}<span class="sec">That is you — another seller must record it</span></button>`;
     }
+    if (S.blockedIds.includes(String(s.student_id))) {
+      return `<button disabled style="opacity:.45">${nameOf(s)}<span class="sec">Another seller must record this</span></button>`;
+    }
     const bal = S.balances[s.student_id] || 0;
     const tag = s.section ? ` · ${s.section}` : '';
     const debt = bal > 0 ? ` · owes ${money(bal)}` : '';
@@ -722,10 +725,12 @@ function pick(st){
   /* Nobody records anything against their own record — not a sale, not a
      payment, not a void. The server refuses too; this is just the polite
      version that happens before they have typed anything. */
-  if (S.selfIds.includes(String(st.student_id))) {
+  const barred = S.selfIds.concat(S.blockedIds);
+  if (barred.includes(String(st.student_id))) {
     $('results').classList.add('hide');
-    $('saleErr').textContent =
-      'You cannot record anything on your own account. Ask another seller to do it.';
+    $('saleErr').textContent = S.selfIds.includes(String(st.student_id))
+      ? 'You cannot record anything on your own account. Ask another seller to do it.'
+      : 'You are not allowed to record anything for this person. Ask another seller.';
     $('fStudent').value = '';
     return;
   }
@@ -1017,7 +1022,7 @@ async function flush(){
     if (!r.ok) { setLed('err', r.error === 'busy' ? 'Retrying…' : 'Sync problem'); return; }
 
     const bad = r.rejected || [];
-    const permanent = ['over_limit','would_exceed_limit','missing_id','self_transaction'];
+    const permanent = ['over_limit','would_exceed_limit','missing_id','self_transaction','blocked_student'];
     const dropIds = batch.filter(x => x.kind === 'student').map(x => x.id)
       .concat(r.accepted || [])
       .concat(bad.filter(b => permanent.includes(b.reason)).map(b => b.entry_id));
@@ -1034,8 +1039,8 @@ async function flush(){
     await outboxDrop(dropIds);
     if (r.balances) S.balances = r.balances;
     if (r.stock) S.stock = r.stock;
-    const selfs = bad.filter(b => b.reason === 'self_transaction');
-    if (selfs.length) toast('Rejected — you cannot record anything on your own account.', 6000);
+    const selfs = bad.filter(b => b.reason === 'self_transaction' || b.reason === 'blocked_student');
+    if (selfs.length) toast('Rejected — you are not allowed to record that for this person.', 6000);
     const overs = bad.filter(b => b.reason === 'over_limit' || b.reason === 'would_exceed_limit');
     if (overs.length) toast(`${overs.length} sale(s) rejected — debt limit reached. Collect payment.`, 6000);
     if (S.student) renderStudent();
@@ -1093,8 +1098,9 @@ $('recList').onclick = async e => {
   try {
     const r = await api('voidEntry', { entry_id: row.dataset.id });
     if (!r.ok) {
-      $('recErr').textContent = r.error === 'self_transaction'
-        ? 'You cannot void anything on your own account. Ask another seller.'
+      $('recErr').textContent =
+        r.error === 'self_transaction' ? 'You cannot void anything on your own account. Ask another seller.'
+        : r.error === 'blocked_student' ? 'You are not allowed to void anything for this person.'
         : why(r);
       b.disabled = false; b.textContent = 'Void'; return;
     }
