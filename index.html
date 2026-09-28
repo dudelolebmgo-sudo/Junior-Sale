@@ -175,13 +175,41 @@
   .cl input{padding:10px;text-align:center;font-weight:700}
   .cl.short{border-color:var(--bad)}
   .cl.over{border-color:var(--warn)}
+  .today{display:flex;align-items:baseline;justify-content:space-between;
+    gap:10px;margin-top:18px;padding:0 2px}
+  .today .dt{font-family:var(--display);font-weight:700;font-size:16px;letter-spacing:-.01em}
+  .today .clock{font-size:13px;font-weight:600;color:var(--muted);font-variant-numeric:tabular-nums}
+
+  .shift{background:var(--card);border:1px solid var(--line);border-radius:var(--r);
+    padding:13px 14px;margin-top:9px;box-shadow:var(--shadow)}
+  .shift.live{border-color:var(--brand);border-width:1.5px;background:var(--brand-soft)}
+  .shift .sh{display:flex;align-items:center;gap:8px;margin-bottom:9px}
+  .shift .nm2{font-weight:700;font-size:14px;letter-spacing:.01em}
+  .shift .when{font-size:12.5px;font-weight:600;color:var(--muted);
+    font-variant-numeric:tabular-nums}
+  .shift.live .when{color:var(--brand-deep)}
+  .shift .now{margin-left:auto;font-size:11px;font-weight:700;letter-spacing:.03em;
+    text-transform:uppercase;background:var(--brand);color:#fff;
+    padding:3px 8px;border-radius:99px}
+  .who2{display:flex;flex-wrap:wrap;gap:5px}
+  .who2 span{font-size:12.5px;font-weight:600;background:var(--bg);
+    border:1px solid var(--line);color:var(--ink);padding:4px 9px;border-radius:99px}
+  .shift.live .who2 span{background:#fff;border-color:transparent;color:var(--brand-deep)}
+  .noday{background:var(--card);border:1px solid var(--line);border-radius:var(--r);
+    padding:16px;margin-top:9px;text-align:center;font-size:14px;
+    font-weight:600;color:var(--muted);box-shadow:var(--shadow)}
+  .closed{margin-top:9px;padding:10px 13px;border-radius:var(--r-sm);
+    background:var(--bad-soft);color:var(--bad);font-size:13.5px;font-weight:700;
+    text-align:center}
+
   .rost{font-size:14px;line-height:1.5}
   .rost b{display:block;font-size:11px;letter-spacing:.04em;text-transform:uppercase;
     color:var(--muted);margin:8px 0 2px}
   .rost .live{color:var(--ok);font-weight:700}
-  .warnbox{margin-top:12px;padding:12px 13px;border-radius:var(--r-sm);
-    background:var(--bad-soft);color:var(--bad);font-size:14px;font-weight:600;
-    border-left:3px solid var(--bad)}
+  .warnbox{margin-top:10px;padding:12px 14px;border-radius:var(--r-sm);
+    background:var(--bad-soft);color:var(--bad);font-size:13.5px;font-weight:500;
+    line-height:1.5;border-left:3px solid var(--bad)}
+  .warnbox b{font-weight:700}
 
   /* recent */
   .rec{background:var(--card);border:1px solid var(--line);border-radius:var(--r-sm);
@@ -258,7 +286,7 @@
     <button data-d="advisory">Advisory day</button>
   </div>
 
-  <div id="onNow" class="who" style="margin-top:18px"></div>
+  <div id="onNow"></div>
   <div id="issueBox"></div>
 
   <label for="fFirst">First name</label>
@@ -416,7 +444,7 @@ const FLUSH_MS = 2000;
 let S = {
   token:null, seller:null, session:null,
   products:[], students:[], balances:{}, stock:{}, available:null,
-  dayType:'normal', period:null, shiftId:'', canEditCatalog:false,
+  dayType:'normal', period:null, shiftId:'', canEditCatalog:false, selfIds:[],
   limit:20, near:15,
   student:null, cart:{}, method:null, payMethod:null,
   pin:'', pending:0, lastAct:Date.now(), flushing:false
@@ -527,30 +555,49 @@ $('dayType').onclick = e => {
 };
 
 async function loadToday(){
-  $('onNow').innerHTML = '<span class="rost">Checking the rota…</span>';
+  $('onNow').innerHTML = '<div class="noday">Checking the rota…</div>';
   try {
     const r = await api('today', { day_type: S.dayType });
-    if (!r.ok) { $('onNow').innerHTML = '<span class="rost">Could not load the rota.</span>'; return; }
+    if (!r.ok) { $('onNow').innerHTML = '<div class="noday">Could not load the rota.</div>'; return; }
 
     if (r.holiday) {
-      $('onNow').innerHTML = '<span class="rost"><b>This week</b>October break — no sale.</span>';
+      $('onNow').innerHTML = `<div class="today"><span class="dt">${prettyDate(r.date)}</span>
+        <span class="clock">${r.time}</span></div>
+        <div class="noday">October break — no sale this week</div>`;
     } else {
-      const mark = p => r.period === p ? ' <span class="live">· selling now</span>' : '';
-      $('onNow').innerHTML = `<span class="rost">
-        <b>Week ${r.week} · ${r.date} · ${r.time}</b>
-        <b>Break${mark('BREAK')}</b>${r.breaks.join(', ') || '—'}
-        <b>Lunch${mark('LUNCH')}</b>${r.lunch.join(', ') || '—'}
-        ${r.after_hours ? '<b style="color:var(--bad)">Sales are closed for today</b>' : ''}
-      </span>`;
+      const card = (key, label, names) => {
+        const live = r.period === key;
+        const win = r.times ? r.times[key].join(' – ') : '';
+        return `<div class="shift${live ? ' live' : ''}">
+          <div class="sh"><span class="nm2">${label}</span>
+            <span class="when">${win}</span>
+            ${live ? '<span class="now">Selling now</span>' : ''}</div>
+          <div class="who2">${(names || []).map(n => `<span>${n}</span>`).join('') || '<span>—</span>'}</div>
+        </div>`;
+      };
+      $('onNow').innerHTML =
+        `<div class="today"><span class="dt">${prettyDate(r.date)}</span>
+           <span class="clock">${r.time}</span></div>`
+        + card('BREAK', 'Break', r.breaks)
+        + card('LUNCH', 'Lunch', r.lunch)
+        + (r.after_hours ? '<div class="closed">Sales are closed for today</div>' : '');
     }
 
     $('issueBox').innerHTML = (r.issues || []).map(i => `<div class="warnbox">
-      ${Math.abs(i.missing)} item${Math.abs(i.missing) === 1 ? '' : 's'}
-      ${i.missing > 0 ? 'missing' : 'unaccounted'} from ${i.date} ${i.period.toLowerCase()} —
-      ${i.sellers.join(', ')}. Still to be counted and recorded.</div>`).join('');
+      <b>${Math.abs(i.missing)} item${Math.abs(i.missing) === 1 ? '' : 's'}
+      ${i.missing > 0 ? 'missing' : 'unaccounted for'}</b> — ${prettyDate(i.date)},
+      ${i.period.toLowerCase()}. ${i.sellers.join(', ')} still need to count and record it.
+      </div>`).join('');
   } catch (err) {
-    $('onNow').innerHTML = '<span class="rost">No connection — check the network.</span>';
+    $('onNow').innerHTML = '<div class="noday">No connection — check the network</div>';
   }
+}
+
+function prettyDate(iso){
+  const [y, m, d] = String(iso).split('-').map(Number);
+  const dt = new Date(Date.UTC(y, m - 1, d));
+  return dt.toLocaleDateString(undefined,
+    { weekday: 'long', day: 'numeric', month: 'long', timeZone: 'UTC' });
 }
 
 const ROTA_MSG = {
@@ -586,6 +633,7 @@ async function login(){
     S.stock = r.stock || {};
     S.limit = r.debt_limit; S.near = r.near_limit; S.session = r.session;
     S.period = r.period; S.shiftId = r.shift_id || ''; S.canEditCatalog = !!r.can_edit_catalog;
+    S.selfIds = r.self_ids || [];
     $('pinErr').textContent = '';
     $('lnkAdmin').classList.toggle('hide', !S.canEditCatalog);
     $('lnkExp').classList.remove('hide');
@@ -635,6 +683,9 @@ $('fStudent').oninput = () => {
     .filter(s => nameOf(s).toLowerCase().includes(q))
     .slice(0, 6);
   const rows = hits.map(s => {
+    if (S.selfIds.includes(String(s.student_id))) {
+      return `<button disabled style="opacity:.45">${nameOf(s)}<span class="sec">That is you — another seller must record it</span></button>`;
+    }
     const bal = S.balances[s.student_id] || 0;
     const tag = s.section ? ` · ${s.section}` : '';
     const debt = bal > 0 ? ` · owes ${money(bal)}` : '';
@@ -667,6 +718,16 @@ function addStudent(){
 
 function pick(st){
   if (!st) return;
+  /* Nobody records anything against their own record — not a sale, not a
+     payment, not a void. The server refuses too; this is just the polite
+     version that happens before they have typed anything. */
+  if (S.selfIds.includes(String(st.student_id))) {
+    $('results').classList.add('hide');
+    $('saleErr').textContent =
+      'You cannot record anything on your own account. Ask another seller to do it.';
+    $('fStudent').value = '';
+    return;
+  }
   S.student = st; S.cart = {}; S.method = null;
   $('fStudent').value = nameOf(st);
   $('results').classList.add('hide');
@@ -955,7 +1016,7 @@ async function flush(){
     if (!r.ok) { setLed('err', r.error === 'busy' ? 'Retrying…' : 'Sync problem'); return; }
 
     const bad = r.rejected || [];
-    const permanent = ['over_limit','would_exceed_limit','missing_id'];
+    const permanent = ['over_limit','would_exceed_limit','missing_id','self_transaction'];
     const dropIds = batch.filter(x => x.kind === 'student').map(x => x.id)
       .concat(r.accepted || [])
       .concat(bad.filter(b => permanent.includes(b.reason)).map(b => b.entry_id));
@@ -972,7 +1033,9 @@ async function flush(){
     await outboxDrop(dropIds);
     if (r.balances) S.balances = r.balances;
     if (r.stock) S.stock = r.stock;
-    const overs = bad.filter(b => permanent.includes(b.reason));
+    const selfs = bad.filter(b => b.reason === 'self_transaction');
+    if (selfs.length) toast('Rejected — you cannot record anything on your own account.', 6000);
+    const overs = bad.filter(b => b.reason === 'over_limit' || b.reason === 'would_exceed_limit');
     if (overs.length) toast(`${overs.length} sale(s) rejected — debt limit reached. Collect payment.`, 6000);
     if (S.student) renderStudent();
     updatePending();
@@ -1028,7 +1091,12 @@ $('recList').onclick = async e => {
   b.disabled = true; b.textContent = 'Voiding…';
   try {
     const r = await api('voidEntry', { entry_id: row.dataset.id });
-    if (!r.ok) { $('recErr').textContent = why(r); b.disabled = false; b.textContent = 'Void'; return; }
+    if (!r.ok) {
+      $('recErr').textContent = r.error === 'self_transaction'
+        ? 'You cannot void anything on your own account. Ask another seller.'
+        : why(r);
+      b.disabled = false; b.textContent = 'Void'; return;
+    }
     S.balances = r.balances;
     row.classList.add('gone'); b.remove();
     if (S.student) renderStudent();
