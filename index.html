@@ -564,7 +564,7 @@ async function loadToday(){
     if (r.holiday) {
       $('onNow').innerHTML = `<div class="today"><span class="dt">${prettyDate(r.date)}</span>
         <span class="clock">${r.time}</span></div>
-        <div class="noday">October break — no sale this week</div>`;
+        <div class="noday">No sale this week</div>`;
     } else {
       const card = (key, label, names) => {
         const live = r.period === key;
@@ -605,8 +605,7 @@ const ROTA_MSG = {
   not_your_shift: 'You are not on this shift. Only the sellers listed above can sign in right now.',
   not_your_week:  'You are not on the rota this week.',
   after_hours:    'Sales are closed for today.',
-  holiday:        'No sale this week — October break.',
-  before_start:   'The rota has not started yet.'
+  no_sale:        'There is no sale this week.'
 };
 
 async function login(){
