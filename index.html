@@ -445,7 +445,7 @@ const FLUSH_MS = 2000;
 let S = {
   token:null, seller:null, session:null,
   products:[], students:[], balances:{}, stock:{}, available:null,
-  dayType:'normal', period:null, shiftId:'', canEditCatalog:false, selfIds:[], blockedIds:[],
+  dayType:'normal', period:null, shiftId:'', canEditCatalog:false, selfIds:[], blockedIds:[], busy:false,
   limit:20, near:15,
   student:null, cart:{}, method:null, payMethod:null,
   pin:'', pending:0, lastAct:Date.now(), flushing:false
@@ -564,7 +564,7 @@ async function loadToday(){
     if (r.holiday) {
       $('onNow').innerHTML = `<div class="today"><span class="dt">${prettyDate(r.date)}</span>
         <span class="clock">${r.time}</span></div>
-        <div class="noday">No sale this week</div>`;
+        <div class="noday">October break — no sale this week</div>`;
     } else {
       const card = (key, label, names) => {
         const live = r.period === key;
@@ -605,7 +605,8 @@ const ROTA_MSG = {
   not_your_shift: 'You are not on this shift. Only the sellers listed above can sign in right now.',
   not_your_week:  'You are not on the rota this week.',
   after_hours:    'Sales are closed for today.',
-  no_sale:        'There is no sale this week.'
+  holiday:        'No sale this week — October break.',
+  before_start:   'The rota has not started yet.'
 };
 
 async function login(){
@@ -924,12 +925,31 @@ function renderTotal(){
   o.className = cls; o.innerHTML = msg;
 
   const something = total > 0 || paid > 0;
-  $('btnConfirm').disabled = !S.method || !something || newBal > S.limit;
-  $('btnConfirm').textContent = total === 0 && paid > 0 ? 'Record payment' : 'Confirm sale';
+  /* S.busy keeps the button dead while a confirm is in flight — renderTotal
+     runs during that window and would otherwise switch it back on. */
+  $('btnConfirm').disabled = S.busy || !S.method || !something || newBal > S.limit;
+  if (!S.busy) {
+    $('btnConfirm').textContent = total === 0 && paid > 0 ? 'Record payment' : 'Confirm sale';
+  }
 }
 
 /* =========================== confirm ============================ */
 $('btnConfirm').onclick = async () => {
+  /* Two taps used to mean two sales: the handler awaits, and nothing stopped
+     a second press generating a fresh set of entry_ids. Idempotency keys
+     cannot catch that — the duplicates are genuinely different entries. */
+  if (S.busy) return;
+  S.busy = true;
+  $('btnConfirm').disabled = true;
+  try {
+    await doConfirm();
+  } finally {
+    S.busy = false;
+    renderTotal();
+  }
+};
+
+async function doConfirm(){
   touch();
   const total = cartTotal();
   const paid  = paidUsd();
@@ -995,7 +1015,7 @@ $('btnConfirm').onclick = async () => {
     : `${money(paid)} payment from ${S.student.first_name}. ` +
       (newBal > 0 ? `Owes ${money(newBal)}.` : 'All square.'));
   reset();
-};
+}
 
 function reset(){
   S.student = null; S.cart = {}; S.method = null;
@@ -1021,7 +1041,7 @@ async function flush(){
     if (!r.ok) { setLed('err', r.error === 'busy' ? 'Retrying…' : 'Sync problem'); return; }
 
     const bad = r.rejected || [];
-    const permanent = ['over_limit','would_exceed_limit','missing_id','self_transaction','blocked_student'];
+    const permanent = ['over_limit','would_exceed_limit','missing_id','self_transaction','blocked_student','duplicate_payment'];
     const dropIds = batch.filter(x => x.kind === 'student').map(x => x.id)
       .concat(r.accepted || [])
       .concat(bad.filter(b => permanent.includes(b.reason)).map(b => b.entry_id));
@@ -1038,6 +1058,8 @@ async function flush(){
     await outboxDrop(dropIds);
     if (r.balances) S.balances = r.balances;
     if (r.stock) S.stock = r.stock;
+    const dups = bad.filter(b => b.reason === 'duplicate_payment');
+    if (dups.length) toast('That payment was already recorded a moment ago.', 6000);
     const selfs = bad.filter(b => b.reason === 'self_transaction' || b.reason === 'blocked_student');
     if (selfs.length) toast('Rejected — you are not allowed to record that for this person.', 6000);
     const overs = bad.filter(b => b.reason === 'over_limit' || b.reason === 'would_exceed_limit');
